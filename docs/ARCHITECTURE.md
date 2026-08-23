@@ -59,7 +59,7 @@ strands-cashflow-guardian/
 ├── .gitignore
 │
 ├── docs/
-│   ├── architecture.md            # This document
+│   ├── ARCHITECTURE.md            # This document
 │   └── BUILD_GUIDE.md             # Judging-criteria map, fatal-flaw checklist, stretch goals
 │
 ├── agents/

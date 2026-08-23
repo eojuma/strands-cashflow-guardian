@@ -1,6 +1,6 @@
 # CashflowGuardian — Build Guide (Hackathon Operating Plan)
 
-> This is the "build guide" referenced throughout the GitHub issues and `architecture.md`. It maps the AWS **"Agents for Humans"** hackathon rules (the Devpost page) to concrete deliverables. The system design itself lives in [`architecture.md`](./architecture.md); this document is about *winning the submission*, section by section.
+> This is the "build guide" referenced throughout the GitHub issues and `ARCHITECTURE.md`. It maps the AWS **"Agents for Humans"** hackathon rules (the Devpost page) to concrete deliverables. The system design itself lives in [`ARCHITECTURE.md`](./ARCHITECTURE.md); this document is about *winning the submission*, section by section.
 >
 > Track: **Professional Agents**. Repo: `eojuma/strands-cashflow-guardian`.
 
@@ -34,7 +34,7 @@
 
 ## 3. Architecture Diagram
 
-The canonical diagram is the mermaid flowchart in `architecture.md` §3. This is also the source for the submission PNG (`demo/architecture-diagram.png`, Day 21).
+The canonical diagram is the mermaid flowchart in `ARCHITECTURE.md` §3. This is also the source for the submission PNG (`demo/architecture-diagram.png`, Day 21).
 
 It must show, at minimum:
 

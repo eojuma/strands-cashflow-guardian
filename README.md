@@ -17,7 +17,7 @@ CashflowGuardian runs two specialist agents under one orchestrator:
 
 Every externally-visible action — every email sent, every invoice finalized — pauses for explicit human approval first. Nothing is autonomous in the sense of "unsupervised." It's autonomous in the sense of "you don't have to remember to do it."
 
-Full system design: see [`docs/architecture.md`](./docs/architecture.md). Hackathon operating plan (judging criteria, fatal-flaw checklist, stretch goals): [`docs/BUILD_GUIDE.md`](./docs/BUILD_GUIDE.md).
+Full system design: see [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md). Hackathon operating plan (judging criteria, fatal-flaw checklist, stretch goals): [`docs/BUILD_GUIDE.md`](./docs/BUILD_GUIDE.md).
 
 ---
 
@@ -132,7 +132,7 @@ pytest tests/
 
 ## Human-in-the-Loop Design
 
-No agent in this system sends an email, finalizes an invoice, or takes any other externally-visible action without first appearing in the dashboard's **Pending Approvals** panel for a human to **Approve**, **Edit**, or **Reject**. This is a hard architectural constraint, not a configurable setting — see `docs/architecture.md` §7 for how the state machine enforces it.
+No agent in this system sends an email, finalizes an invoice, or takes any other externally-visible action without first appearing in the dashboard's **Pending Approvals** panel for a human to **Approve**, **Edit**, or **Reject**. This is a hard architectural constraint, not a configurable setting — see `docs/ARCHITECTURE.md` §7 for how the state machine enforces it.
 
 ---
 
@@ -155,5 +155,5 @@ Licensed under the MIT License. See [`LICENSE`](./LICENSE) for details.
 
 - **Track:** Professional Agents
 - **Event:** AWS "Agents for Humans" Hackathon
-- Architecture diagram: [`docs/architecture.md`](./docs/architecture.md)
+- Architecture diagram: [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)
 - Demo video: _link added at submission_
