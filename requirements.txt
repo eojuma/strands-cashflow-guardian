@@ -1,0 +1,8 @@
+# Strands Agents SDK — multi-agent framework (AWS "Agents for Humans" hackathon)
+strands-agents>=1.53.0,<2.0.0
+
+# AWS SDK — Bedrock runtime used by Strands' BedrockModel (boto3 default credential chain)
+boto3>=1.43.0,<2.0.0
+
+# Loads a local .env into os.environ for development (never commit the .env itself)
+python-dotenv>=1.0.0,<2.0.0
