@@ -45,10 +45,10 @@ def test_orchestrator_system_prompt_instructs_routing():
     assert "invoice_dunning" in orchestrator.system_prompt
 
 
-def test_invoice_dunning_stub_prompt_describes_fake_invoice_object():
+def test_invoice_dunning_prompt_instructs_pdf_generation():
     agent = invoice_dunning.build_invoice_dunning_agent(MODEL_ID)
     assert "milestone-complete" in agent.system_prompt
-    assert "invoice object" in agent.system_prompt
+    assert "generate_invoice_pdf" in agent.system_prompt
 
 
 def test_fake_trigger_describes_a_milestone_complete_event():

@@ -3,5 +3,6 @@ credentials/
 .venv/
 __pycache__/
 .pytest_cache/
+generated/
 node_modules/
 .codewhale/
