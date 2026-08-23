@@ -25,6 +25,8 @@ from strands import Agent
 from strands.models import BedrockModel
 
 from agents.tools import build_sub_agent_tools
+from agents.tools.gmail_tool import send_email as _gmail_send_email
+from memory import dynamo_client, schema
 
 DEFAULT_MODEL_ID = "anthropic.claude-3-5-sonnet-20241022-v2:0"
 
@@ -104,6 +106,78 @@ def run(trigger: str | None = None) -> str:
     print(f"[orchestrator] specialist tools: {sorted(orchestrator.tool_names)}")
     print(f"[orchestrator] delegated output:\n{output}")
     return output
+
+
+# ---------------------------------------------------------------------------
+# Human-in-the-loop state machine (Days 11-12)
+#
+# The deterministic shell: proposed actions are persisted as ``pending``; only
+# after a human approves/edits them does ``execute_action`` perform the external
+# side effect. The LLM is never re-invoked on the resolution path.
+# ---------------------------------------------------------------------------
+def _default_send_email(to: str, subject: str, body: str) -> bool:
+    """Default external-action executor (real Gmail send; requires credentials)."""
+    return _gmail_send_email(to, subject, body)
+
+
+def persist_proposed_actions(proposed_actions: list[dict]) -> list[dict]:
+    """Persist proposed actions as ``pending`` (nothing is executed here)."""
+    return [dynamo_client.create_pending_action(a) for a in proposed_actions]
+
+
+def execute_action(action_id: str, send_fn=None) -> bool:
+    """Execute a single action if (and only if) its status is approved/edited.
+
+    This is the hard guard from docs/ARCHITECTURE.md §7: it re-reads the persisted
+    status and refuses to run unless it is ``approved`` or ``edited``. Returns
+    ``True`` when the action was executed, ``False`` otherwise.
+    """
+    if send_fn is None:
+        send_fn = _default_send_email
+
+    action = dynamo_client.get_pending_action(action_id)
+    if action is None:
+        return False
+    if action.get(schema.ACTION_STATUS) not in (schema.STATUS_APPROVED, schema.STATUS_EDITED):
+        return False
+
+    client = dynamo_client.get_client(action.get(schema.CLIENT_ID, "")) or {}
+    send_fn(
+        to=client.get(schema.EMAIL, ""),
+        subject=action.get(schema.ACTION_TYPE, ""),
+        body=action.get(schema.DRAFTED_CONTENT, ""),
+    )
+    dynamo_client.update_action_status(action_id, schema.STATUS_EXECUTED)
+    return True
+
+
+def resolve_action(
+    action_id: str, decision: str, edited_content: str | None = None, send_fn=None
+) -> dict | None:
+    """Apply an approve / edit / reject decision to a pending action.
+
+    Idempotent: once an action has left ``pending`` it is left untouched.
+    Rejection halts with no side effects; approval/editing then executes the
+    action through :func:`execute_action`.
+    """
+    action = dynamo_client.get_pending_action(action_id)
+    if action is None or action.get(schema.ACTION_STATUS) != schema.STATUS_PENDING:
+        return action
+
+    if decision == "rejected":
+        dynamo_client.update_action_status(action_id, schema.STATUS_REJECTED)
+        return dynamo_client.get_pending_action(action_id)
+
+    if decision == "approved":
+        dynamo_client.update_action_status(action_id, schema.STATUS_APPROVED)
+    elif decision == "edited":
+        dynamo_client.update_action_content(action_id, edited_content)
+        dynamo_client.update_action_status(action_id, schema.STATUS_EDITED)
+    else:
+        return action  # unknown decision -> no side effects
+
+    execute_action(action_id, send_fn=send_fn)
+    return dynamo_client.get_pending_action(action_id)
 
 
 def main() -> None:
