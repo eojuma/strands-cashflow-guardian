@@ -15,15 +15,16 @@ from __future__ import annotations
 
 from typing import Any
 
-from agents.invoice_dunning import build_invoice_dunning_agent
-
 
 def build_sub_agent_tools(model: Any) -> list[Any]:
     """Build each specialist agent and wrap it as a Strands tool.
 
     ``model`` is passed straight through to each specialist (a ``Model`` instance
-    or a Bedrock model-id string).
+    or a Bedrock model-id string). The specialist import is local to avoid a
+    circular import (``invoice_dunning`` imports ``agents.tools.pdf_tool``).
     """
+    from agents.invoice_dunning import build_invoice_dunning_agent
+
     invoice_dunning = build_invoice_dunning_agent(model)
     return [
         invoice_dunning.as_tool(
