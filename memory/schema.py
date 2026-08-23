@@ -74,6 +74,12 @@ ACTION_STATUSES = (
     STATUS_EXECUTED,
 )
 
+# SOW term keys (inside the ``sow_terms`` JSON string; see parse_sow_terms)
+SOW_DELIVERABLES = "deliverables"
+SOW_HOURLY_RATE_USD = "hourly_rate_usd"
+SOW_INCLUDED_REVISIONS = "included_revisions"
+SOW_OUT_OF_SCOPE_EXAMPLES = "out_of_scope_examples"
+
 
 # ---------------------------------------------------------------------------
 # Validators
@@ -122,6 +128,15 @@ def validate_action(action: dict[str, Any]) -> None:
         validate_escalation_tier(action[ESCALATION_TIER])
 
 
+def parse_sow_terms(sow_terms: str) -> dict[str, Any]:
+    """Parse a stored ``sow_terms`` JSON string into a queryable dict.
+
+    ``sow_terms`` is stored as a JSON string in the ``Clients`` table; the Scope
+    Creep Sentinel uses this to read deliverables and out-of-scope examples.
+    """
+    return json.loads(sow_terms or "{}")
+
+
 # ---------------------------------------------------------------------------
 # Table shape (consumed by memory/dynamo_client.create_tables() for local runs
 # and tests; the SAM template mirrors this same shape in YAML).
@@ -147,10 +162,10 @@ PENDING_ACTIONS_GSIS = [
 # Documented example item (one fake client record)
 # ---------------------------------------------------------------------------
 _SOW_TERMS_DICT: dict[str, Any] = {
-    "deliverables": ["Landing page", "Contact form", "Responsive breakpoints"],
-    "hourly_rate_usd": 75.0,
-    "included_revisions": 2,
-    "out_of_scope_examples": ["Dark mode toggle", "CMS integration"],
+    SOW_DELIVERABLES: ["Landing page", "Contact form", "Responsive breakpoints"],
+    SOW_HOURLY_RATE_USD: 75.0,
+    SOW_INCLUDED_REVISIONS: 2,
+    SOW_OUT_OF_SCOPE_EXAMPLES: ["Dark mode toggle", "CMS integration"],
 }
 
 EXAMPLE_CLIENT: dict[str, Any] = {
