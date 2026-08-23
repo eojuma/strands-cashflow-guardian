@@ -1,0 +1,55 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  CashflowGuardian memory layer (Day 2). Two DynamoDB tables back the Strands
+  Memory adapter: Clients (per-client SOW + billing + history) and
+  PendingActions (human-in-the-loop approval queue). Lambda + EventBridge are
+  added in a later phase.
+
+Parameters:
+  TableNamePrefix:
+    Type: String
+    Default: CashflowGuardian
+    Description: Prefix for table names. Defaults match memory/schema.py.
+
+Resources:
+  ClientsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${TableNamePrefix}-Clients"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: client_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: client_id
+          KeyType: HASH
+
+  PendingActionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${TableNamePrefix}-PendingActions"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: action_id
+          AttributeType: S
+        - AttributeName: client_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: action_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: ClientIdIndex
+          KeySchema:
+            - AttributeName: client_id
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+
+Outputs:
+  ClientsTableName:
+    Description: Physical name of the Clients table.
+    Value: !Ref ClientsTable
+  PendingActionsTableName:
+    Description: Physical name of the PendingActions table.
+    Value: !Ref PendingActionsTable
