@@ -28,25 +28,27 @@ MODEL_ID = "anthropic.claude-3-5-sonnet-20241022-v2:0"
 # --- Day 3: wiring ----------------------------------------------------------
 
 
-def test_orchestrator_registers_invoice_dunning_as_tool():
+def test_orchestrator_registers_both_specialists_as_tools():
     agent = build_orchestrator(model=MODEL_ID)
     assert isinstance(agent, Agent)
     assert "invoice_dunning" in agent.tool_names
+    assert "scope_sentinel" in agent.tool_names
 
 
-def test_sub_agent_is_exposed_as_agent_tool_not_function():
+def test_sub_agents_are_exposed_as_agent_tools_not_functions():
     tools = build_sub_agent_tools(MODEL_ID)
-    assert len(tools) == 1
-    tool = tools[0]
-    # "agent" tool_type == agents-as-tools (Agent.as_tool()), not a plain @tool.
-    assert tool.tool_type == "agent"
-    assert tool.tool_name == "invoice_dunning"
+    assert {t.tool_name for t in tools} == {"invoice_dunning", "scope_sentinel"}
+    for tool in tools:
+        # "agent" tool_type == agents-as-tools (Agent.as_tool()), not a plain @tool.
+        assert tool.tool_type == "agent"
 
 
 def test_orchestrator_system_prompt_instructs_routing():
     assert "invoice_dunning" in ORCHESTRATOR_SYSTEM_PROMPT
+    assert "scope_sentinel" in ORCHESTRATOR_SYSTEM_PROMPT
     agent = build_orchestrator(model=MODEL_ID)
     assert "invoice_dunning" in agent.system_prompt
+    assert "scope_sentinel" in agent.system_prompt
 
 
 def test_invoice_dunning_prompt_instructs_pdf_generation():
