@@ -54,17 +54,17 @@ It must show, at minimum:
 | Document generation | ReportLab |
 | Email | Gmail API |
 | Deployment | AWS Lambda + EventBridge via SAM (`infra/template.yaml`) |
-| Frontend | Next.js + Tailwind CSS |
+| Frontend | Next.js 16 + React 19 + tokenized CSS |
 | Tone guardrails | Constrained prompts + `guardrails_config` tone-check tool (optionally Bedrock Guardrails) |
 
 ## 5. Build Phases
 
 Four GitHub milestones map one-to-one onto the four phases in `create_issues.sh`:
 
-- **Phase 1: Foundation (Days 1-5)** — Bedrock + Strands hello-world, DynamoDB schema, orchestrator skeleton, PDF tool, Gmail tool.
-- **Phase 2: Core Agent Logic (Days 6-13)** — escalation ladder + guardrails, Scope Creep Sentinel, human-in-the-loop state machine, one buffer day.
-- **Phase 3: Product Experience (Days 14-18)** — dashboard, Lambda + EventBridge deploy, demo data, full dry run.
-- **Phase 4: Demo & Submission (Days 19-23)** — video script/edit, architecture diagram, README/license/builder post, final submission.
+- **Phase 1: Foundation (Days 1-5) — implemented.** Bedrock/Strands setup, DynamoDB schema, orchestrator skeleton, PDF tool, Gmail tool.
+- **Phase 2: Core Agent Logic (Days 6-13) — implemented and tested.** Escalation ladder, guardrails, Scope Sentinel, and human-in-the-loop state machine.
+- **Phase 3: Product Experience (Days 14-18) — code complete locally.** Dashboard, REST API, SAM resources, demo data, and deterministic dry run are implemented. Live AWS deployment validation remains pending.
+- **Phase 4: Demo & Submission (Days 19-23) — in progress.** The video script is complete; architecture image, final recording/edit, README final pass, builder post, and submission remain.
 
 ## 6. Judging Criteria ↔ Build Mapping
 
@@ -74,7 +74,7 @@ The five criteria from the Devpost page, each mapped to the concrete deliverable
    - Sub-agents exposed as Strands tools ("agents-as-tools"), not `if/else` routing — Day 3.
    - Low-level tools (`pdf_tool`, `gmail_tool`, `guardrails_config`) LLM-invoked via `@tool` — Day 4, Day 5.
    - Scoped IAM, no `dynamodb:*` / `bedrock:*` wildcards — Day 2, Day 16.
-   - Deployed to Lambda + EventBridge, not localhost — Day 16.
+   - Lambda, HTTP API, EventBridge, and scoped IAM are defined in SAM; live-account validation remains pending — Day 16.
    - Live demo link — stretch goal #1 (see §8).
    - (Optional) Bedrock AgentCore deployment — stretch goal #2.
 
@@ -104,9 +104,9 @@ Every item below is a hard submission requirement from the Devpost page. None ma
 
 - [ ] **Text description** — what it does, who it's for, how it works (Devpost form).
 - [ ] **Public repo URL** — repo must be public. *(Verified: repo is public.)*
-- [ ] **Source code + assets + setup instructions** — a stranger can clone and run from the README alone.
+- [x] **Source code + setup instructions** — README distinguishes offline verification from credentialed AWS/Gmail setup.
 - [ ] **MIT or Apache license visible in the About section** *(Verified: MIT detected.)*
-- [ ] **README** — finalized.
+- [ ] **README** — implementation-reconciled; final screenshots/links remain pending.
 - [ ] **Architecture diagram** — submitted and embedded in README.
 - [ ] **Demo video ≤ 5:00** — shows the working project end-to-end AND covers problem / who it's for / why it matters.
 - [ ] **AWS Builder ID** — provided with the submission.

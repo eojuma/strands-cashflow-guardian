@@ -81,9 +81,8 @@ strands-cashflow-guardian/
 │                                     # update_action_content()
 │
 ├── lambda_handlers/
-│   ├── orchestrator_handler.py      # Lambda entry point wrapping agents/orchestrator.py
-│   ├── scope_sentinel_handler.py    # (only needed if deployed as separate function)
-│   └── invoice_dunning_handler.py   # (only needed if deployed as separate function)
+│   ├── orchestrator_handler.py      # Scheduled DynamoDB proposal pass
+│   └── api_handler.py               # Dashboard REST API and approvals
 │
 ├── infra/
 │   ├── template.yaml                # AWS SAM template: Lambda, EventBridge, DynamoDB, IAM
@@ -93,7 +92,7 @@ strands-cashflow-guardian/
 │
 ├── frontend/
 │   ├── package.json
-│   ├── next.config.js
+│   ├── next.config.ts
 │   ├── app/
 │   │   ├── layout.tsx
 │   │   ├── page.tsx                 # Composes the three dashboard panels
@@ -117,7 +116,7 @@ strands-cashflow-guardian/
 │
 └── demo/
     ├── video_script.md
-    └── architecture-diagram.png
+    └── architecture-diagram.png     # Final rendered asset pending
 ```
 
 **Rule of thumb while building:** if you're about to create a file not listed here, stop and ask whether it belongs in an existing file instead. Every file above earns its place by being referenced in a specific flow below — that's what keeps a solo 23-day build from sprawling.
@@ -209,7 +208,8 @@ flowchart TB
 
 **Responsibilities:**
 - **Scheduled path (deterministic shell):** EventBridge invokes `orchestrator_handler`, which starts the Orchestrator Strands agent with a fixed task ("run scheduled check").
-- **Agentic delegation (inside the run):** the Orchestrator's reasoning loop invokes the two sub-agents as Strands tools — `scope_sentinel.check_inbox()` and `invoice_dunning.check_due_dates()` — which in turn call the low-level `@tool` functions (`pdf_tool`, `gmail_tool`, `guardrails_config`) as the LLM deems necessary.
+- **Agentic path:** `python -m agents.orchestrator` invokes the Strands orchestrator and specialist tools; this requires Bedrock credentials.
+- **Scheduled path:** `lambda_handlers/orchestrator_handler.py` loads clients from DynamoDB and runs the deterministic specialist cores before persisting pending proposals.
 - **Persistence (deterministic, after the run):** the wrapper collects every proposed action the agent produced and writes each to `PendingActions` with `status=pending`. Nothing is executed on this path.
 - **Resolution path (deterministic, never agentic):** on the dashboard's Approve/Edit/Reject call, `resolve_action` reads the stored record, applies the decision, and `execute_action` runs only after re-reading a persisted `status ∈ {approved, edited}`. The LLM is **not** re-invoked at execution time — the drafted (or edited) content is sent exactly as stored.
 
@@ -260,26 +260,26 @@ def execute_action(action_id):
 ### 5.2 Scope Creep Sentinel — `agents/scope_sentinel.py`
 
 **Responsibilities:**
-- `check_inbox()`: fetches recent unread emails via `gmail_tool.read_recent_emails()`.
-- For each email, prompts the LLM with the email content + the client's `sow_terms` from memory, asking it to classify: in-scope / out-of-scope, and if out-of-scope, estimate extra hours.
+- `check_inbox(emails, client)`: deterministically compares supplied emails with the client's stored SOW terms.
+- The live Strands agent separately exposes Gmail reading and PDF generation tools.
 - If out-of-scope, calls `pdf_tool.generate_change_order_pdf()` and returns a proposed `PendingActions` record with `agent_reasoning` populated.
 
 **Interface:**
 ```python
-def check_inbox() -> list[dict]:
+def check_inbox(emails: list[dict], client: dict) -> list[dict]:
     """Returns a list of proposed PendingActions records, or empty list if nothing flagged."""
 ```
 
 ### 5.3 Invoice & Dunning Agent — `agents/invoice_dunning.py`
 
 **Responsibilities:**
-- `check_due_dates()`: for every client, checks `payment_history` for:
+- `check_due_dates(client, today)`: checks a client's `payment_history` for:
   - A milestone marked complete with no invoice yet generated → propose `invoice` action.
   - An unpaid invoice past due date → determine escalation tier (day_3 / day_7 / day_14) based on days overdue and `tone_log` (never re-send the same tier twice), draft the appropriate email, apply `guardrails_config.apply_tone_guardrail()`, and return a `dunning_email` proposed action.
 
 **Interface:**
 ```python
-def check_due_dates() -> list[dict]:
+def check_due_dates(client: dict, today: str) -> list[dict]:
     """Returns proposed PendingActions records for new invoices and/or dunning escalations."""
 ```
 
@@ -323,13 +323,17 @@ approved   edited   rejected
 
 ### 8.1 Flow: Milestone Complete → Invoice Sent
 
-1. Human clicks "Mark Milestone Complete" on dashboard (MVP trigger; GitHub webhook is a stretch goal).
-2. API writes a milestone-complete flag to the client's record.
-3. On next Orchestrator run, `invoice_dunning.check_due_dates()` detects it, calls `pdf_tool.generate_invoice_pdf()`.
-4. Orchestrator writes a `pending` action with the generated invoice.
-5. Dashboard's Approvals panel shows it.
-6. Human clicks Approve.
-7. Orchestrator calls `gmail_tool.send_email()` with the invoice attached, sets status to `executed`, updates `payment_history` in the Clients table.
+The dashboard currently demonstrates this interaction locally: clicking **Mark
+milestone complete** shows a generating state and creates a unique invoice draft
+in Pending Approvals. The persisted production flow is the next backend step:
+
+1. Add a milestone-complete REST endpoint and persist the milestone against the client.
+2. Generate the PDF through `generate_invoice_pdf()`.
+3. Persist an `invoice` action as `pending`.
+4. Reuse the existing Approve/Edit/Reject execution path.
+
+The approval state machine and PDF tool already exist; only milestone persistence
+and endpoint wiring remain.
 
 ### 8.2 Flow: Overdue Invoice → Escalation
 
@@ -364,7 +368,8 @@ The frontend needs a minimal REST surface. If not building a separate API Gatewa
 | `/actions/pending` | GET | List all `pending` actions (for Approvals panel) |
 | `/actions/{action_id}/resolve` | POST | Body: `{decision: "approved" \| "edited" \| "rejected", edited_content?: string}` |
 | `/activity-log` | GET | Returns recent resolved actions + their `agent_reasoning`, for the Activity Log panel |
-| `/clients/{client_id}/milestone-complete` | POST | MVP manual trigger for milestone completion |
+The first four endpoints are implemented in `lambda_handlers/api_handler.py`.
+The milestone-complete interaction currently runs as a screenshot-ready frontend prototype; its persisted REST endpoint remains future work.
 
 Keep this contract this small. Every additional endpoint is additional Phase 3 surface area you don't have slack for.
 
@@ -372,11 +377,13 @@ Keep this contract this small. Every additional endpoint is additional Phase 3 s
 
 ## 10. Deployment Architecture
 
-- **Compute:** Each Lambda handler in `lambda_handlers/` wraps the corresponding function in `agents/`. A single `orchestrator_handler.py` is sufficient for MVP — the sub-agents are invoked in-process as Strands tools by the Orchestrator's reasoning loop (not as separate Lambda invocations or network calls), while the wrapper around the run stays deterministic: it persists proposed actions and executes only those whose persisted status is `approved` or `edited`.
-- **Trigger:** One EventBridge rule on a fixed schedule (`rate(15 minutes)` is a reasonable default) invokes `orchestrator_handler.py`.
+- **Compute:** `OrchestratorFunction` runs the scheduled deterministic specialist pass. `ApiFunction` serves the dashboard contract and approval state machine.
+- **Trigger:** EventBridge invokes `OrchestratorFunction` every 15 minutes.
 - **Storage:** Two DynamoDB tables (`Clients`, `PendingActions`), both defined in `infra/template.yaml`.
 - **IAM:** A single execution role scoped to exactly: read/write on the two DynamoDB tables, `bedrock:InvokeModel` on the specific Claude model ARNs in use, and no broader permissions. Avoid `dynamodb:*` or `bedrock:*` wildcards — a judge reading your IAM policy as part of "Technological Implementation" will notice the difference.
-- **Frontend hosting:** Vercel or Amplify Hosting both work; this is a secondary concern relative to backend correctness.
+- **Frontend hosting:** not configured yet; Vercel or Amplify Hosting are suitable options.
+
+The SAM and IAM shape are covered by local tests. Live AWS deployment remains pending until credentials, Bedrock access, and Gmail OAuth are configured.
 
 ---
 
