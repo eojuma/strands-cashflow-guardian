@@ -1,9 +1,9 @@
-export type Client = { client_id: string; name: string; email: string; billing_rate: number; payment_history?: { status: string }[] };
+export type Client = { client_id: string; name: string; email: string; billing_rate: number; overdue_days?: number; payment_history?: { status: string }[] };
 export type Action = { action_id: string; client_id: string; action_type: string; drafted_content: string; agent_reasoning: string; status: string };
 
 export const demoClients: Client[] = [
   { client_id: "demo_on_time", name: "Northstar Studio", email: "maya@northstar.example", billing_rate: 95, payment_history: [{ status: "paid" }] },
-  { client_id: "demo_late", name: "Marcus Chen", email: "marcus@chen.example", billing_rate: 85, payment_history: [{ status: "unpaid" }] },
+  { client_id: "demo_late", name: "Marcus Chen", email: "marcus@chen.example", billing_rate: 85, overdue_days: 8, payment_history: [{ status: "unpaid" }] },
   { client_id: "demo_scope", name: "Aster House", email: "hello@aster.example", billing_rate: 75, payment_history: [{ status: "paid" }] },
 ];
 export const demoActions: Action[] = [
