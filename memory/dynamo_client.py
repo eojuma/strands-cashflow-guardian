@@ -88,6 +88,11 @@ def get_client(client_id: str) -> dict[str, Any] | None:
     return resp.get("Item")
 
 
+def get_clients() -> list[dict[str, Any]]:
+    """List all client records for the dashboard."""
+    return _paginate(_table(schema.CLIENTS_TABLE).scan, {})
+
+
 def put_client(client: dict[str, Any]) -> dict[str, Any]:
     """Insert or fully replace a client record (used for seeding/demo data)."""
     schema.validate_client(client)
