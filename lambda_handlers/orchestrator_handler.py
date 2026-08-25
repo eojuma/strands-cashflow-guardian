@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 from datetime import datetime, timezone
 
 from agents import invoice_dunning, scope_sentinel
@@ -23,7 +22,9 @@ def lambda_handler(event, context):
     """
     event = event or {}
     proposals = []
-    clients = event.get("clients", [])
+    clients = event.get("clients")
+    if clients is None:
+        clients = dynamo_client.get_clients()
     for client in clients:
         proposals.extend(invoice_dunning.check_due_dates(client, _event_date(event)))
         proposals.extend(scope_sentinel.check_inbox(event.get("emails", {}).get(client.get("client_id"), []), client))
