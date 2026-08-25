@@ -33,11 +33,11 @@ A freelancer's real accountant would notice a request creeping outside scope, an
 |---|---|
 | Agent framework | [Strands Agents SDK](https://github.com/strands-agents) (Python) |
 | LLM | Amazon Bedrock (Claude Haiku for classification, Claude Sonnet for drafting) |
-| Memory | Strands Memory backed by DynamoDB |
+| Memory | DynamoDB (`Clients` and `PendingActions`) |
 | Document generation | ReportLab |
 | Email | Gmail API |
 | Deployment | AWS Lambda + EventBridge, defined via SAM (`infra/template.yaml`) |
-| Frontend | Next.js + Tailwind CSS |
+| Frontend | Next.js 16 + React 19 + tokenized CSS |
 | Tone guardrails | Constrained system prompts + a `guardrails_config` tone-check tool (optionally backed by Amazon Bedrock Guardrails) |
 
 ---
@@ -48,8 +48,8 @@ A freelancer's real accountant would notice a request creeping outside scope, an
 strands-cashflow-guardian/
 ├── docs/                # Architecture reference + build guide
 ├── agents/              # Orchestrator + specialist agents + tools
-├── memory/              # DynamoDB schema and Strands Memory adapter
-├── lambda_handlers/     # AWS Lambda entry points per agent
+├── memory/              # DynamoDB schema and persistence adapter
+├── lambda_handlers/     # Scheduled orchestrator + dashboard HTTP API handlers
 ├── infra/               # SAM template, deploy script, IAM policies
 ├── frontend/            # Next.js Command Center dashboard
 ├── scripts/             # Demo data seeding
@@ -81,7 +81,13 @@ cp .env.example .env
 
 Fill in `.env` with your AWS region, Bedrock model ID, and Gmail OAuth credentials. Never commit `.env`.
 
-### 2. Request Bedrock model access
+### 2. Verify AWS credentials and Bedrock access
+
+The real Strands/Bedrock path requires AWS credentials. Copying `.env.example` does not create credentials.
+
+```bash
+aws sts get-caller-identity
+```
 
 In the AWS Console, go to Bedrock → Model access, and request access to the Claude models used in this project. This can take a few minutes to be approved.
 
@@ -93,7 +99,15 @@ In the AWS Console, go to Bedrock → Model access, and request access to the Cl
 4. Download the credentials JSON and reference its path in `.env`.
 5. Run the local auth flow once to generate a token (see `agents/tools/gmail_tool.py` for the first-run script).
 
-### 4. Deploy infrastructure
+### 4. Run the local verification suite
+
+```bash
+python -m pytest -q
+```
+
+The suite uses Moto and does not require AWS credentials.
+
+### 5. Deploy infrastructure
 
 ```bash
 cd infra
@@ -102,15 +116,17 @@ cd infra
 
 This provisions DynamoDB tables, Lambda functions, the EventBridge schedule, and IAM roles via AWS SAM.
 
-### 5. Seed demo data
+Live deployment still requires configured AWS credentials, SAM CLI, Bedrock model access, and Gmail OAuth.
+
+### 6. Seed demo data
 
 ```bash
-python scripts/seed_demo_data.py
+python -m scripts.seed_demo_data
 ```
 
 This creates 3–5 synthetic client relationships (on-time payer, late payer, scope-creep requester) for local testing and demo recording.
 
-### 6. Run the frontend
+### 7. Run the frontend
 
 ```bash
 cd frontend
@@ -120,13 +136,25 @@ npm run dev
 
 Open `http://localhost:3000` to view the Command Center dashboard.
 
+To use live backend data, set the deployed SAM API URL:
+
+```bash
+export NEXT_PUBLIC_API_URL="https://<api-id>.execute-api.<region>.amazonaws.com"
+```
+
 ---
 
 ## Running Tests
 
 ```bash
-pytest tests/
+python -m pytest -q
 ```
+
+## Current Implementation Status
+
+Implemented and covered locally: the Strands specialist agents, deterministic dunning and scope classification, PDF/Gmail tools, DynamoDB memory, approval state machine, dashboard REST API, Next.js Command Center, SAM resource definitions, demo personas, and the deterministic end-to-end dry run.
+
+Still requiring external configuration or manual completion: live Bedrock/AWS smoke testing, Gmail OAuth and real sends, public frontend hosting, final architecture image, recorded demo video, and Devpost submission.
 
 ---
 
@@ -155,5 +183,6 @@ Licensed under the MIT License. See [`LICENSE`](./LICENSE) for details.
 
 - **Track:** Professional Agents
 - **Event:** AWS "Agents for Humans" Hackathon
-- Architecture diagram: [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)
+- Architecture source diagram: [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)
+- Demo narration/shot list: [`demo/video_script.md`](./demo/video_script.md)
 - Demo video: _link added at submission_
