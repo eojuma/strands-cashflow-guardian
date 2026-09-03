@@ -124,6 +124,26 @@ def test_update_action_content_replaces_draft(db):
     assert updated[schema.ACTION_STATUS] == schema.STATUS_PENDING
 
 
+def test_list_clients_returns_all_records(db):
+    dynamo_client.put_client(_client())
+    dynamo_client.put_client(_client(client_id="client_002"))
+    clients = dynamo_client.list_clients()
+    assert {c[schema.CLIENT_ID] for c in clients} == {"client_001", "client_002"}
+
+
+def test_list_actions_returns_all_statuses(db):
+    action = dynamo_client.create_pending_action(_action())
+    dynamo_client.update_action_status(action[schema.ACTION_ID], schema.STATUS_EXECUTED)
+    dynamo_client.create_pending_action(_action(action_type="dunning_email"))
+
+    all_actions = dynamo_client.list_actions()
+    assert len(all_actions) == 2
+    assert {a[schema.ACTION_STATUS] for a in all_actions} == {
+        schema.STATUS_EXECUTED,
+        schema.STATUS_PENDING,
+    }
+
+
 def test_invalid_action_type_is_rejected(db):
     with pytest.raises(ValueError):
         dynamo_client.create_pending_action(_action(action_type="wire_money"))
