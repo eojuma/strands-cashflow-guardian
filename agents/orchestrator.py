@@ -147,8 +147,34 @@ def execute_action(action_id: str, send_fn=None) -> bool:
         subject=action.get(schema.ACTION_TYPE, ""),
         body=action.get(schema.DRAFTED_CONTENT, ""),
     )
+    if action.get(schema.ACTION_TYPE) == "invoice":
+        _record_executed_invoice(client, action)
     dynamo_client.update_action_status(action_id, schema.STATUS_EXECUTED)
     return True
+
+
+def _record_executed_invoice(client: dict, action: dict) -> None:
+    """After an approved invoice is sent, log it to the client's payment history
+    so the dunning ladder can later escalate it if it goes unpaid (flow §8.1).
+
+    Uses the action's persisted structured fields (amount/due_date/milestone) and
+    reuses its ``action_id`` as the invoice reference.
+    """
+    client_id = action.get(schema.CLIENT_ID)
+    if not client_id or not client:
+        return
+
+    history = list(client.get(schema.PAYMENT_HISTORY) or [])
+    history.append(
+        {
+            "invoice_id": action.get(schema.ACTION_ID),
+            "milestone_id": action.get("milestone_id"),
+            "amount": action.get("amount") or 0.0,
+            "due_date": action.get("due_date") or "",
+            "status": "unpaid",
+        }
+    )
+    dynamo_client.update_client(client_id, {schema.PAYMENT_HISTORY: history})
 
 
 def resolve_action(

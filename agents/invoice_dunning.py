@@ -11,7 +11,7 @@ for human approval, never an auto-send.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from strands import Agent
@@ -49,6 +49,9 @@ _TIERS_DESCENDING = ("day_14", "day_7", "day_3")
 
 # Key used on proposed actions to make the human-in-the-loop invariant explicit.
 REQUIRES_HUMAN_APPROVAL = "requires_human_approval"
+
+# Default invoice payment term (net-14) used when a milestone completes.
+INVOICE_TERM_DAYS = 14
 
 
 def _parse_date(value: str):
@@ -191,6 +194,80 @@ def check_due_dates(client: dict, today: str) -> list[dict]:
                 REQUIRES_HUMAN_APPROVAL: True,
             }
         )
+    return proposed
+
+
+def default_due_date(completed_at: str | None = None) -> str:
+    """Invoice due date: ``INVOICE_TERM_DAYS`` after the milestone completion
+    date (defaults to now when no completion date is given)."""
+    base = _parse_datetime(completed_at) if completed_at else datetime.now(timezone.utc)
+    return (base + timedelta(days=INVOICE_TERM_DAYS)).date().isoformat()
+
+
+def _parse_datetime(value: str) -> datetime:
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def propose_invoice(
+    client: dict,
+    milestone: dict,
+    today: str | None = None,
+) -> dict:
+    """Return a proposed ``invoice`` action for a completed milestone.
+
+    Deterministic: drafts the invoice PDF via ``generate_invoice_pdf`` and
+    attaches a human-readable ``agent_reasoning``. Nothing is sent; the returned
+    record must be persisted as ``pending`` and approved by a human first.
+    """
+    client_id = client.get(schema.CLIENT_ID, "")
+    client_name = client.get(schema.NAME, client_id)
+    amount = float(milestone.get("amount", 0.0))
+    name = milestone.get("name", milestone.get("milestone_id", "Milestone"))
+    due_date = milestone.get("due_date") or default_due_date(milestone.get("completed_at"))
+
+    pdf_path = generate_invoice_pdf(
+        client_id, amount, due_date, client_name=client_name
+    )
+
+    return {
+        schema.CLIENT_ID: client_id,
+        schema.ACTION_TYPE: "invoice",
+        schema.DRAFTED_CONTENT: pdf_path,
+        # Structured fields mirror what the PDF shows so the dashboard (and a
+        # later dunning pass) never needs to parse the document itself.
+        "milestone_id": milestone.get("milestone_id"),
+        "amount": amount,
+        "due_date": due_date,
+        "milestone_name": name,
+        schema.AGENT_REASONING: (
+            f"Milestone '{name}' completed; no invoice generated yet. "
+            f"Proposed invoice for ${amount:,.2f} due {due_date} (PDF pending approval)."
+        ),
+        REQUIRES_HUMAN_APPROVAL: True,
+    }
+
+
+def check_milestones(client: dict) -> list[dict]:
+    """Return proposed ``invoice`` actions for every completed, uninvoiced
+    milestone on the client's record.
+
+    Reads ``payment_history``/``milestones`` (as seeded by the milestone-complete
+    trigger) and proposes an invoice for any milestone whose invoice has not yet
+    been generated. Deterministic and pure — nothing is sent.
+    """
+    client_id = client.get(schema.CLIENT_ID, "")
+    invoiced_ids = {
+        entry.get("milestone_id")
+        for entry in (client.get(schema.PAYMENT_HISTORY) or [])
+        if entry.get("milestone_id")
+    }
+    proposed: list[dict] = []
+    for milestone in client.get(schema.MILESTONES) or []:
+        if milestone.get("status") != "complete":
+            continue
+        if milestone.get("milestone_id") in invoiced_ids:
+            continue
+        proposed.append(propose_invoice(client, milestone))
     return proposed
 
 

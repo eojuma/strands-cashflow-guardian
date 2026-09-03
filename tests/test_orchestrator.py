@@ -184,3 +184,27 @@ def test_persist_proposed_actions_sets_pending(db):
     assert len(persisted) == 1
     assert persisted[0][schema.ACTION_STATUS] == schema.STATUS_PENDING
     assert persisted[0][schema.ACTION_ID]
+
+
+def test_executing_approved_invoice_records_to_payment_history(db):
+    _seed_client()
+    action = _seed_action(
+        action_type="invoice",
+        amount=2400.0,
+        due_date="2026-09-01",
+        milestone_id="mvp",
+    )
+    send, calls = _fake_send()
+
+    result = orchestrator.resolve_action(
+        action[schema.ACTION_ID], "approved", send_fn=send
+    )
+
+    assert result[schema.ACTION_STATUS] == schema.STATUS_EXECUTED
+    assert len(calls) == 1
+    client = dynamo_client.get_client("client_001")
+    history = client[schema.PAYMENT_HISTORY]
+    assert len(history) == 1
+    assert history[0]["status"] == "unpaid"
+    assert history[0]["milestone_id"] == "mvp"
+    assert history[0]["amount"] == 2400.0
