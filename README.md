@@ -49,11 +49,11 @@ strands-cashflow-guardian/
 ├── docs/                # Architecture reference + build guide
 ├── agents/              # Orchestrator + specialist agents + tools
 ├── memory/              # DynamoDB schema and Strands Memory adapter
-├── lambda_handlers/     # AWS Lambda entry points per agent
+├── lambda_handlers/     # Lambda entry points: scheduled check + dashboard REST API
 ├── infra/               # SAM template, deploy script, IAM policies
 ├── frontend/            # Next.js Command Center dashboard
-├── scripts/             # Demo data seeding
-├── tests/               # Unit tests per agent
+├── scripts/             # Demo-data seeding + local API server
+├── tests/               # Unit tests per agent + handler tests
 └── demo/                # Video script and architecture diagram assets
 ```
 
@@ -93,29 +93,48 @@ In the AWS Console, go to Bedrock → Model access, and request access to the Cl
 4. Download the credentials JSON and reference its path in `.env`.
 5. Run the local auth flow once to generate a token (see `agents/tools/gmail_tool.py` for the first-run script).
 
-### 4. Deploy infrastructure
+> For demos and dry runs you can skip Gmail entirely: set `CASHFLOW_SEND_MODE=log`
+> in `.env` and approved sends are logged instead of emailed.
+
+### 4a. Local dry run (no AWS compute needed)
 
 ```bash
-cd infra
-./deploy.sh
+python scripts/seed_demo_data.py     # personas into DynamoDB (or DynamoDB Local)
+python scripts/serve_api.py          # REST API on http://localhost:8000
 ```
 
-This provisions DynamoDB tables, Lambda functions, the EventBridge schedule, and IAM roles via AWS SAM.
-
-### 5. Seed demo data
-
-```bash
-python scripts/seed_demo_data.py
-```
-
-This creates 3–5 synthetic client relationships (on-time payer, late payer, scope-creep requester) for local testing and demo recording.
-
-### 6. Run the frontend
+Then in a second terminal:
 
 ```bash
 cd frontend
+cp .env.local.example .env.local
 npm install
-npm run dev
+npm run dev                          # dashboard on http://localhost:3000
+```
+
+The dashboard proxies `/api/*` to `localhost:8000` in dev. Use **Run scheduled
+check** to trigger a pass instantly (the deployed EventBridge rule does this
+automatically every 15 minutes), then **Approve / Edit / Reject** actions.
+
+### 4b. Deploy infrastructure
+
+```bash
+cd infra
+./deploy.sh                          # `sam deploy`; see script for options
+```
+
+This provisions DynamoDB tables, the scheduled Orchestrator Lambda (EventBridge),
+and the dashboard REST API via AWS SAM. It does **not** deploy the frontend —
+host it on Vercel or Amplify and point `NEXT_PUBLIC_API_BASE_URL` at the printed
+API endpoint.
+
+### 5. Run the frontend (against a deployed API)
+
+```bash
+cd frontend
+# set NEXT_PUBLIC_API_BASE_URL to the API endpoint printed by deploy.sh
+npm install
+npm run dev                          # or: npm run build && npm start
 ```
 
 Open `http://localhost:3000` to view the Command Center dashboard.
