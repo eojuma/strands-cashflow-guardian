@@ -1,16 +1,65 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 Description: >
-  CashflowGuardian memory layer (Day 2). Two DynamoDB tables back the Strands
-  Memory adapter: Clients (per-client SOW + billing + history) and
-  PendingActions (human-in-the-loop approval queue). Lambda + EventBridge are
-  added in a later phase.
+  CashflowGuardian (AWS "Agents for Humans" hackathon). Memory layer (Clients +
+  PendingActions tables) plus the Phase 3 compute surface: the scheduled
+  Orchestrator Lambda (EventBridge trigger) and the REST API Lambda in front of
+  the Next.js Command Center dashboard.
+
+Globals:
+  Function:
+    Runtime: python3.11
+    Timeout: 60
+    MemorySize: 256
+    CodeUri: ..
+    Environment:
+      Variables:
+        # "log" for dry-run demos (no real Gmail send); omit for real sends.
+        CASHFLOW_SEND_MODE: !Ref SendMode
+    # Scoped role (no dynamodb:* / bedrock:* wildcards) — see iam-policies/.
+    Policies:
+      - Version: "2012-10-17"
+        Statement:
+          - Sid: DynamoDBMemoryAccess
+            Effect: Allow
+            Action:
+              - dynamodb:GetItem
+              - dynamodb:PutItem
+              - dynamodb:UpdateItem
+              - dynamodb:Query
+              - dynamodb:Scan
+            Resource:
+              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/CashflowGuardian-Clients"
+              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/CashflowGuardian-PendingActions"
+              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/CashflowGuardian-PendingActions/index/ClientIdIndex"
+          - Sid: BedrockInvokeModel
+            Effect: Allow
+            Action: bedrock:InvokeModel
+            Resource: !Sub "arn:aws:bedrock:${AWS::Region}::foundation-model/anthropic.claude-3-5-sonnet-20241022-v2:0"
+          - Sid: CloudWatchLogs
+            Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*"
 
 Parameters:
   TableNamePrefix:
     Type: String
     Default: CashflowGuardian
     Description: Prefix for table names. Defaults match memory/schema.py.
+  ScheduleExpression:
+    Type: String
+    Default: rate(15 minutes)
+    Description: EventBridge schedule for the orchestrator's scheduled check.
+  SendMode:
+    Type: String
+    Default: log
+    AllowedValues: [log, live]
+    Description: >
+      "log" never sends real email (drafts are logged) — safe for demos and dry
+      runs. "live" sends through Gmail after a human approves an action.
 
 Resources:
   ClientsTable:
@@ -46,6 +95,38 @@ Resources:
           Projection:
             ProjectionType: ALL
 
+  # Scheduled Orchestrator: EventBridge -> lambda_handlers/orchestrator_handler.py
+  OrchestratorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: lambda_handlers.orchestrator_handler.lambda_handler
+      Events:
+        ScheduledCheck:
+          Type: Schedule
+          Properties:
+            Schedule: !Ref ScheduleExpression
+            Name: cashflow-guardian-scheduled-check
+            Description: Run the Orchestrator's scheduled dunning + scope check.
+
+  # REST surface for the dashboard -> lambda_handlers/api_handler.py
+  CommandCenterApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: prod
+      Description: REST surface consumed by the Next.js Command Center.
+
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: lambda_handlers.api_handler.lambda_handler
+      Events:
+        ProxyApi:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref CommandCenterApi
+            Method: ANY
+            Path: /{proxy+}
+
 Outputs:
   ClientsTableName:
     Description: Physical name of the Clients table.
@@ -53,3 +134,6 @@ Outputs:
   PendingActionsTableName:
     Description: Physical name of the PendingActions table.
     Value: !Ref PendingActionsTable
+  ApiEndpoint:
+    Description: Base URL for the Command Center REST API.
+    Value: !Sub "https://${CommandCenterApi}.execute-api.${AWS::Region}.amazonaws.com/prod"
