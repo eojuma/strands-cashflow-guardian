@@ -1,10 +1,20 @@
-credentials/
-.env
-.venv/
+# Python
 __pycache__/
+*.py[cod]
 .pytest_cache/
+.venv/
 generated/
+
+# Env / secrets
+.env
+credentials/
+
+# Node / Next.js
 node_modules/
 .next/
+out/
 *.tsbuildinfo
+
+# OS / editor
+.DS_Store
 .codewhale/

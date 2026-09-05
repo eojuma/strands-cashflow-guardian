@@ -1,7 +1,120 @@
-"use client";
-import { useEffect, useState } from "react";
-import { Action, api, Client, demoActions, demoActivity, demoClients } from "../lib/api";
-import { ActivityLog } from "./components/ActivityLog";
-import { ApprovalsPanel } from "./components/ApprovalsPanel";
-import { ClientsPanel } from "./components/ClientsPanel";
-export default function Dashboard() { const [clients, setClients] = useState<Client[]>(demoClients), [actions, setActions] = useState<Action[]>(demoActions), [activity, setActivity] = useState<Action[]>(demoActivity); const [demo, setDemo] = useState(true), [error, setError] = useState(""), [generating, setGenerating] = useState<string | null>(null); const load = async () => { try { const [nextClients, nextActions, nextActivity] = await Promise.all([api.clients(), api.pending(), api.activity()]); setClients(nextClients); setActions(nextActions); setActivity(nextActivity); setDemo(false); setError(""); } catch { setError("Live API unavailable — showing the seeded review desk."); setDemo(true); } }; useEffect(() => { void load(); }, []); const resolve = async (id: string, decision: string, content?: string) => { if (demo) { const action = actions.find((item) => item.action_id === id); if (action) { setActions(actions.filter((item) => item.action_id !== id)); setActivity([{ ...action, status: decision === "rejected" ? "rejected" : "executed", drafted_content: content || action.drafted_content }, ...activity]); } return; } await api.resolve(id, decision, content); await load(); }; const milestone = async (client: Client) => { setGenerating(client.client_id); await new Promise((resolvePromise) => setTimeout(resolvePromise, 650)); setGenerating(null); const action = { action_id: `milestone-${client.client_id}-${Date.now()}`, client_id: client.client_id, action_type: "invoice", drafted_content: "Invoice generated for completed milestone.", agent_reasoning: "Milestone marked complete; invoice is ready for your review before sending.", status: "pending" }; setActions((current) => [action, ...current.filter((item) => item.client_id !== client.client_id || item.action_type !== "invoice" || !item.action_id.startsWith(`milestone-${client.client_id}-`))]); }; return <main className="shell"><header className="masthead"><div><div className="eyebrow">CashflowGuardian · command center</div><h1>Keep the books. Keep the choice.</h1><p className="lede">A quiet desk for the money work that is easy to postpone. Nothing reaches a client until you put your name on it.</p></div><button className="view-toggle" onClick={() => { setDemo(!demo); if (!demo) { setClients(demoClients); setActions(demoActions); setActivity(demoActivity); } else void load(); }}>{demo ? "Viewing seeded desk" : "Viewing live data"} · switch</button></header>{error && <p className="small muted" role="status">{error}</p>}{generating && <p className="small" role="status">Generating invoice for {clients.find((client) => client.client_id === generating)?.name}…</p>}<div className="ledger-grid"><ClientsPanel clients={clients} onMilestone={milestone} /><ApprovalsPanel actions={actions} onResolve={resolve} /><ActivityLog entries={activity} /></div></main>; }
+"use client"
+
+import { useCallback, useEffect, useState } from "react"
+import {
+  listActivityLog,
+  listClients,
+  listPendingActions,
+  runScheduledCheck,
+  type Client,
+  type PendingAction,
+  type ScheduledCheckSummary,
+} from "@/lib/api"
+import ClientsPanel from "@/app/components/ClientsPanel"
+import ApprovalsPanel from "@/app/components/ApprovalsPanel"
+import ActivityLog from "@/app/components/ActivityLog"
+
+export default function Dashboard() {
+  const [clients, setClients] = useState<Client[]>([])
+  const [pending, setPending] = useState<PendingAction[]>([])
+  const [activity, setActivity] = useState<PendingAction[]>([])
+  const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [checking, setChecking] = useState(false)
+
+  const refresh = useCallback(async () => {
+    setError(null)
+    try {
+      const [c, p, a] = await Promise.all([
+        listClients(),
+        listPendingActions(),
+        listActivityLog(),
+      ])
+      setClients(c)
+      setPending(p)
+      setActivity(a)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load data")
+    }
+  }, [])
+
+  useEffect(() => {
+    refresh()
+  }, [refresh])
+
+  async function handleRunCheck() {
+    setChecking(true)
+    setError(null)
+    try {
+      const summary: ScheduledCheckSummary = await runScheduledCheck()
+      setNotice(
+        summary.proposals_persisted === 0
+          ? "Scheduled check ran — all caught up."
+          : `Scheduled check ran — ${summary.proposals_persisted} new proposal(s): ${Object.entries(
+              summary.by_type,
+            )
+              .map(([k, v]) => `${v} ${k}`)
+              .join(", ")}.`,
+      )
+      await refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Scheduled check failed")
+    } finally {
+      setChecking(false)
+    }
+  }
+
+  async function handleResolved() {
+    await refresh()
+  }
+
+  return (
+    <main className="mx-auto max-w-7xl px-6 py-8">
+      <header className="mb-8 flex items-end justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">
+            CashflowGuardian Command Center
+          </h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Nothing is sent until you approve it. Every action here is a
+            proposal.
+          </p>
+        </div>
+        <button
+          onClick={handleRunCheck}
+          disabled={checking}
+          className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {checking ? "Checking…" : "Run scheduled check"}
+        </button>
+      </header>
+
+      {error && (
+        <div className="mb-6 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error} — check that the API base URL is configured.
+        </div>
+      )}
+      {notice && (
+        <div className="mb-6 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          {notice}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-1">
+          <ClientsPanel
+            clients={clients}
+            onMilestoneComplete={refresh}
+          />
+        </div>
+        <div className="lg:col-span-2">
+          <ApprovalsPanel pending={pending} onResolved={handleResolved} />
+        </div>
+      </div>
+
+      <div className="mt-6">
+        <ActivityLog entries={activity} />
+      </div>
+    </main>
+  )
+}

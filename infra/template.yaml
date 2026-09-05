@@ -1,26 +1,65 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 Description: >
-  CashflowGuardian API, scheduled agent orchestration, and DynamoDB memory.
+  CashflowGuardian (AWS "Agents for Humans" hackathon). Memory layer (Clients +
+  PendingActions tables) plus the Phase 3 compute surface: the scheduled
+  Orchestrator Lambda (EventBridge trigger) and the REST API Lambda in front of
+  the Next.js Command Center dashboard.
+
+Globals:
+  Function:
+    Runtime: python3.11
+    Timeout: 60
+    MemorySize: 256
+    CodeUri: ..
+    Environment:
+      Variables:
+        # "log" for dry-run demos (no real Gmail send); omit for real sends.
+        CASHFLOW_SEND_MODE: !Ref SendMode
+    # Scoped role (no dynamodb:* / bedrock:* wildcards) — see iam-policies/.
+    Policies:
+      - Version: "2012-10-17"
+        Statement:
+          - Sid: DynamoDBMemoryAccess
+            Effect: Allow
+            Action:
+              - dynamodb:GetItem
+              - dynamodb:PutItem
+              - dynamodb:UpdateItem
+              - dynamodb:Query
+              - dynamodb:Scan
+            Resource:
+              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/CashflowGuardian-Clients"
+              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/CashflowGuardian-PendingActions"
+              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/CashflowGuardian-PendingActions/index/ClientIdIndex"
+          - Sid: BedrockInvokeModel
+            Effect: Allow
+            Action: bedrock:InvokeModel
+            Resource: !Sub "arn:aws:bedrock:${AWS::Region}::foundation-model/anthropic.claude-3-5-sonnet-20241022-v2:0"
+          - Sid: CloudWatchLogs
+            Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*"
 
 Parameters:
   TableNamePrefix:
     Type: String
     Default: CashflowGuardian
     Description: Prefix for table names. Defaults match memory/schema.py.
-  BedrockModelId:
+  ScheduleExpression:
     Type: String
-    Default: anthropic.claude-3-5-sonnet-20241022-v2:0
-
-Globals:
-  Function:
-    Runtime: python3.11
-    Timeout: 60
-    MemorySize: 512
-    Environment:
-      Variables:
-        AWS_REGION_NAME: !Ref AWS::Region
-        BEDROCK_MODEL_ID: !Ref BedrockModelId
+    Default: rate(15 minutes)
+    Description: EventBridge schedule for the orchestrator's scheduled check.
+  SendMode:
+    Type: String
+    Default: log
+    AllowedValues: [log, live]
+    Description: >
+      "log" never sends real email (drafts are logged) — safe for demos and dry
+      runs. "live" sends through Gmail after a human approves an action.
 
 Resources:
   ClientsTable:
@@ -56,52 +95,37 @@ Resources:
           Projection:
             ProjectionType: ALL
 
-  DashboardApi:
-    Type: AWS::Serverless::HttpApi
-    Properties:
-      CorsConfiguration:
-        AllowOrigins: ["*"]
-        AllowHeaders: ["content-type"]
-        AllowMethods: [GET, POST, OPTIONS]
-
-  ApiFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: ../
-      Handler: lambda_handlers.api_handler.lambda_handler
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref ClientsTable
-        - DynamoDBCrudPolicy:
-            TableName: !Ref PendingActionsTable
-      Events:
-        Proxy:
-          Type: HttpApi
-          Properties:
-            ApiId: !Ref DashboardApi
-            Path: /{proxy+}
-            Method: ANY
-
+  # Scheduled Orchestrator: EventBridge -> lambda_handlers/orchestrator_handler.py
   OrchestratorFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: ../
       Handler: lambda_handlers.orchestrator_handler.lambda_handler
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref ClientsTable
-        - DynamoDBCrudPolicy:
-            TableName: !Ref PendingActionsTable
-        - Statement:
-            - Effect: Allow
-              Action: bedrock:InvokeModel
-              Resource: !Sub "arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/${BedrockModelId}"
       Events:
         ScheduledCheck:
           Type: Schedule
           Properties:
-            Schedule: rate(15 minutes)
-            Enabled: true
+            Schedule: !Ref ScheduleExpression
+            Name: cashflow-guardian-scheduled-check
+            Description: Run the Orchestrator's scheduled dunning + scope check.
+
+  # REST surface for the dashboard -> lambda_handlers/api_handler.py
+  CommandCenterApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: prod
+      Description: REST surface consumed by the Next.js Command Center.
+
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: lambda_handlers.api_handler.lambda_handler
+      Events:
+        ProxyApi:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref CommandCenterApi
+            Method: ANY
+            Path: /{proxy+}
 
 Outputs:
   ClientsTableName:
@@ -110,6 +134,6 @@ Outputs:
   PendingActionsTableName:
     Description: Physical name of the PendingActions table.
     Value: !Ref PendingActionsTable
-  ApiUrl:
-    Description: Dashboard REST API base URL.
-    Value: !Sub "https://${DashboardApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}"
+  ApiEndpoint:
+    Description: Base URL for the Command Center REST API.
+    Value: !Sub "https://${CommandCenterApi}.execute-api.${AWS::Region}.amazonaws.com/prod"

@@ -33,11 +33,11 @@ A freelancer's real accountant would notice a request creeping outside scope, an
 |---|---|
 | Agent framework | [Strands Agents SDK](https://github.com/strands-agents) (Python) |
 | LLM | Amazon Bedrock (Claude Haiku for classification, Claude Sonnet for drafting) |
-| Memory | DynamoDB (`Clients` and `PendingActions`) |
+| Memory | Strands Memory backed by DynamoDB |
 | Document generation | ReportLab |
 | Email | Gmail API |
 | Deployment | AWS Lambda + EventBridge, defined via SAM (`infra/template.yaml`) |
-| Frontend | Next.js 16 + React 19 + tokenized CSS |
+| Frontend | Next.js + Tailwind CSS |
 | Tone guardrails | Constrained system prompts + a `guardrails_config` tone-check tool (optionally backed by Amazon Bedrock Guardrails) |
 
 ---
@@ -48,12 +48,12 @@ A freelancer's real accountant would notice a request creeping outside scope, an
 strands-cashflow-guardian/
 ├── docs/                # Architecture reference + build guide
 ├── agents/              # Orchestrator + specialist agents + tools
-├── memory/              # DynamoDB schema and persistence adapter
-├── lambda_handlers/     # Scheduled orchestrator + dashboard HTTP API handlers
+├── memory/              # DynamoDB schema and Strands Memory adapter
+├── lambda_handlers/     # Lambda entry points: scheduled check + dashboard REST API
 ├── infra/               # SAM template, deploy script, IAM policies
 ├── frontend/            # Next.js Command Center dashboard
-├── scripts/             # Demo data seeding
-├── tests/               # Unit tests per agent
+├── scripts/             # Demo-data seeding + local API server
+├── tests/               # Unit tests per agent + handler tests
 └── demo/                # Video script and architecture diagram assets
 ```
 
@@ -81,13 +81,7 @@ cp .env.example .env
 
 Fill in `.env` with your AWS region, Bedrock model ID, and Gmail OAuth credentials. Never commit `.env`.
 
-### 2. Verify AWS credentials and Bedrock access
-
-The real Strands/Bedrock path requires AWS credentials. Copying `.env.example` does not create credentials.
-
-```bash
-aws sts get-caller-identity
-```
+### 2. Request Bedrock model access
 
 In the AWS Console, go to Bedrock → Model access, and request access to the Claude models used in this project. This can take a few minutes to be approved.
 
@@ -99,62 +93,59 @@ In the AWS Console, go to Bedrock → Model access, and request access to the Cl
 4. Download the credentials JSON and reference its path in `.env`.
 5. Run the local auth flow once to generate a token (see `agents/tools/gmail_tool.py` for the first-run script).
 
-### 4. Run the local verification suite
+> For demos and dry runs you can skip Gmail entirely: set `CASHFLOW_SEND_MODE=log`
+> in `.env` and approved sends are logged instead of emailed.
+
+### 4a. Local dry run (no AWS compute needed)
 
 ```bash
-python -m pytest -q
+python scripts/seed_demo_data.py     # personas into DynamoDB (or DynamoDB Local)
+python scripts/serve_api.py          # REST API on http://localhost:8000
 ```
 
-The suite uses Moto and does not require AWS credentials.
-
-### 5. Deploy infrastructure
-
-```bash
-cd infra
-./deploy.sh
-```
-
-This provisions DynamoDB tables, Lambda functions, the EventBridge schedule, and IAM roles via AWS SAM.
-
-Live deployment still requires configured AWS credentials, SAM CLI, Bedrock model access, and Gmail OAuth.
-
-### 6. Seed demo data
-
-```bash
-python -m scripts.seed_demo_data
-```
-
-This creates 3–5 synthetic client relationships (on-time payer, late payer, scope-creep requester) for local testing and demo recording.
-
-### 7. Run the frontend
+Then in a second terminal:
 
 ```bash
 cd frontend
+cp .env.local.example .env.local
 npm install
-npm run dev
+npm run dev                          # dashboard on http://localhost:3000
+```
+
+The dashboard proxies `/api/*` to `localhost:8000` in dev. Use **Run scheduled
+check** to trigger a pass instantly (the deployed EventBridge rule does this
+automatically every 15 minutes), then **Approve / Edit / Reject** actions.
+
+### 4b. Deploy infrastructure
+
+```bash
+cd infra
+./deploy.sh                          # `sam deploy`; see script for options
+```
+
+This provisions DynamoDB tables, the scheduled Orchestrator Lambda (EventBridge),
+and the dashboard REST API via AWS SAM. It does **not** deploy the frontend —
+host it on Vercel or Amplify and point `NEXT_PUBLIC_API_BASE_URL` at the printed
+API endpoint.
+
+### 5. Run the frontend (against a deployed API)
+
+```bash
+cd frontend
+# set NEXT_PUBLIC_API_BASE_URL to the API endpoint printed by deploy.sh
+npm install
+npm run dev                          # or: npm run build && npm start
 ```
 
 Open `http://localhost:3000` to view the Command Center dashboard.
-
-To use live backend data, set the deployed SAM API URL:
-
-```bash
-export NEXT_PUBLIC_API_URL="https://<api-id>.execute-api.<region>.amazonaws.com"
-```
 
 ---
 
 ## Running Tests
 
 ```bash
-python -m pytest -q
+pytest tests/
 ```
-
-## Current Implementation Status
-
-Implemented and covered locally: the Strands specialist agents, deterministic dunning and scope classification, PDF/Gmail tools, DynamoDB memory, approval state machine, dashboard REST API, Next.js Command Center, SAM resource definitions, demo personas, and the deterministic end-to-end dry run.
-
-Still requiring external configuration or manual completion: live Bedrock/AWS smoke testing, Gmail OAuth and real sends, public frontend hosting, final architecture image, recorded demo video, and Devpost submission.
 
 ---
 
@@ -183,6 +174,5 @@ Licensed under the MIT License. See [`LICENSE`](./LICENSE) for details.
 
 - **Track:** Professional Agents
 - **Event:** AWS "Agents for Humans" Hackathon
-- Architecture source diagram: [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)
-- Demo narration/shot list: [`demo/video_script.md`](./demo/video_script.md)
+- Architecture diagram: [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)
 - Demo video: _link added at submission_

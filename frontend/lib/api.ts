@@ -1,26 +1,100 @@
-export type Client = { client_id: string; name: string; email: string; billing_rate: number; overdue_days?: number; payment_history?: { status: string }[] };
-export type Action = { action_id: string; client_id: string; action_type: string; drafted_content: string; agent_reasoning: string; status: string };
-
-export const demoClients: Client[] = [
-  { client_id: "demo_on_time", name: "Northstar Studio", email: "maya@northstar.example", billing_rate: 95, payment_history: [{ status: "paid" }] },
-  { client_id: "demo_late", name: "Marcus Chen", email: "marcus@chen.example", billing_rate: 85, overdue_days: 8, payment_history: [{ status: "unpaid" }] },
-  { client_id: "demo_scope", name: "Aster House", email: "hello@aster.example", billing_rate: 75, payment_history: [{ status: "paid" }] },
-];
-export const demoActions: Action[] = [
-  { action_id: "demo_day7", client_id: "demo_late", action_type: "dunning_email", drafted_content: "Subject: Overdue invoice #0231\n\nHi Marcus,\n\nInvoice #0231 is now 8 days past due. Please arrange payment at your convenience.", agent_reasoning: "Invoice #0231 passed the 7-day threshold; no prior day_7 notice has been sent.", status: "pending" },
-  { action_id: "demo_scope", client_id: "demo_scope", action_type: "change_order", drafted_content: "Change order: dark mode toggle", agent_reasoning: "Dark mode toggle is not listed in the SOW; estimated 3 hours at $75.00/hr = $225.00.", status: "pending" },
-];
-export const demoActivity: Action[] = [{ action_id: "demo_paid", client_id: "demo_on_time", action_type: "dunning_email", drafted_content: "", agent_reasoning: "Invoice #0218 was paid before the first reminder threshold.", status: "executed" }];
-
-const base = process.env.NEXT_PUBLIC_API_URL || "";
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(`${base}${path}`, { ...options, headers: { "content-type": "application/json", ...(options?.headers || {}) } });
-  if (!response.ok) throw new Error(`API request failed (${response.status})`);
-  return response.json();
+export interface Client {
+  client_id: string
+  name: string
+  email: string
+  billing_rate: number
+  outstanding_balance: number
+  open_invoices: number
+  uninvoiced_milestones: number
+  updated_at?: string
 }
-export const api = {
-  clients: () => request<Client[]>("/clients"),
-  pending: () => request<Action[]>("/actions/pending"),
-  activity: () => request<Action[]>("/activity-log"),
-  resolve: (id: string, decision: string, edited_content?: string) => request<Action>(`/actions/${id}/resolve`, { method: "POST", body: JSON.stringify({ decision, edited_content }) }),
-};
+
+export type ActionType = "invoice" | "change_order" | "dunning_email"
+export type ActionStatus =
+  | "pending"
+  | "approved"
+  | "edited"
+  | "rejected"
+  | "executed"
+
+export interface PendingAction {
+  action_id: string
+  client_id: string
+  client_name?: string
+  action_type: ActionType
+  escalation_tier?: string | null
+  drafted_content: string
+  agent_reasoning: string
+  status: ActionStatus
+  amount?: number
+  due_date?: string
+  milestone_name?: string
+  created_at?: string
+  resolved_at?: string | null
+}
+
+export interface ScheduledCheckSummary {
+  clients_checked: number
+  skipped_scope_scan?: boolean
+  proposals_persisted: number
+  by_type: Record<string, number>
+}
+
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ?? "/api"
+
+async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const response = await fetch(`${API_BASE}${path}`, {
+    headers: { "Content-Type": "application/json" },
+    ...options,
+  })
+  const body = await response.json()
+  if (!response.ok) {
+    throw new Error((body as { error?: string }).error ?? `HTTP ${response.status}`)
+  }
+  return body as T
+}
+
+export function listClients(): Promise<Client[]> {
+  return request<Client[]>("/clients")
+}
+
+export function listPendingActions(): Promise<PendingAction[]> {
+  return request<PendingAction[]>("/actions/pending")
+}
+
+export function listActivityLog(): Promise<PendingAction[]> {
+  return request<PendingAction[]>("/activity-log")
+}
+
+export function resolveAction(
+  actionId: string,
+  decision: "approved" | "edited" | "rejected",
+  editedContent?: string,
+): Promise<PendingAction> {
+  return request<PendingAction>(`/actions/${actionId}/resolve`, {
+    method: "POST",
+    body: JSON.stringify({ decision, edited_content: editedContent }),
+  })
+}
+
+export function markMilestoneComplete(
+  clientId: string,
+  name: string,
+  amount: number,
+): Promise<PendingAction | { note: string }> {
+  return request<PendingAction | { note: string }>(
+    `/clients/${clientId}/milestone-complete`,
+    {
+      method: "POST",
+      body: JSON.stringify({ name, amount }),
+    },
+  )
+}
+
+export function runScheduledCheck(): Promise<ScheduledCheckSummary> {
+  return request<ScheduledCheckSummary>("/run-scheduled-check", {
+    method: "POST",
+    body: JSON.stringify({}),
+  })
+}

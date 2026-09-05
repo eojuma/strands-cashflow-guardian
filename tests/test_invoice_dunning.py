@@ -14,6 +14,7 @@ from pypdf import PdfReader
 from agents import invoice_dunning
 from agents.tools.guardrails_config import apply_tone_guardrail
 from agents.tools.pdf_tool import generate_change_order_pdf, generate_invoice_pdf
+from memory import schema
 
 MODEL_ID = "anthropic.claude-3-5-sonnet-20241022-v2:0"
 
@@ -150,6 +151,76 @@ def test_same_tier_is_not_reset_for_same_invoice():
     )
     # 7 days overdue, but day_7 already sent -> no new action (no downgrade).
     assert invoice_dunning.check_due_dates(client, "2026-08-20T00:00:00+00:00") == []
+
+
+# --- milestone -> invoice proposals (Phase 3 dashboard trigger) -------------
+
+
+def _milestone_client(**overrides):
+    client = _client([])
+    client[schema.MILESTONES] = [
+        {
+            "milestone_id": "landing_page",
+            "name": "Landing page",
+            "amount": 1200.0,
+            "status": "complete",
+            "completed_at": "2026-08-06T00:00:00+00:00",
+        }
+    ]
+    client.update(overrides)
+    return client
+
+
+def test_check_milestones_proposes_invoice_for_completed_milestone(tmp_path, monkeypatch):
+    monkeypatch.setenv("PDF_OUTPUT_DIR", str(tmp_path))
+    client = _milestone_client()
+
+    proposals = invoice_dunning.check_milestones(client)
+
+    assert len(proposals) == 1
+    action = proposals[0]
+    assert action[schema.ACTION_TYPE] == "invoice"
+    assert action[schema.DRAFTED_CONTENT].endswith(".pdf")
+    assert os.path.isfile(action[schema.DRAFTED_CONTENT])
+    assert "Landing page" in action[schema.AGENT_REASONING]
+    assert "1,200.00" in action[schema.AGENT_REASONING]
+    assert action[invoice_dunning.REQUIRES_HUMAN_APPROVAL] is True
+
+
+def test_check_milestones_ignores_incomplete_and_already_invoiced(tmp_path, monkeypatch):
+    monkeypatch.setenv("PDF_OUTPUT_DIR", str(tmp_path))
+    client = _milestone_client(
+        milestones=[
+            {
+                "milestone_id": "not_done",
+                "name": "Not done",
+                "amount": 500.0,
+                "status": "in_progress",
+                "completed_at": None,
+            }
+        ],
+        payment_history=[
+            {
+                "invoice_id": "inv_done",
+                "milestone_id": "landing_page",
+                "amount": 1200.0,
+                "status": "paid",
+            }
+        ],
+    )
+    # "landing_page" is in payment_history; "not_done" isn't complete -> nothing.
+    assert invoice_dunning.check_milestones(client) == []
+
+
+def test_propose_invoice_due_date_defaults_to_net_14():
+    milestone = {
+        "milestone_id": "m",
+        "name": "Contact form",
+        "amount": 800.0,
+        "status": "complete",
+        "completed_at": "2026-08-06T00:00:00+00:00",
+    }
+    assert invoice_dunning.default_due_date("2026-08-06T00:00:00+00:00") == "2026-08-20"
 
 
 # --- tone guardrail ---------------------------------------------------------

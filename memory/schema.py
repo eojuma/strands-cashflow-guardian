@@ -43,6 +43,7 @@ SOW_TERMS = "sow_terms"              # String (JSON)
 BILLING_RATE = "billing_rate"        # Number
 PAYMENT_HISTORY = "payment_history"  # List<Map>
 TONE_LOG = "tone_log"                # List<Map>
+MILESTONES = "milestones"            # List<Map> — completed milestones awaiting invoicing
 CREATED_AT = "created_at"            # ISO 8601
 UPDATED_AT = "updated_at"            # ISO 8601
 

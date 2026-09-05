@@ -88,8 +88,8 @@ def get_client(client_id: str) -> dict[str, Any] | None:
     return resp.get("Item")
 
 
-def get_clients() -> list[dict[str, Any]]:
-    """List all client records for the dashboard."""
+def list_clients() -> list[dict[str, Any]]:
+    """Return every client record (full scan — fine for MVP table sizes)."""
     return _paginate(_table(schema.CLIENTS_TABLE).scan, {})
 
 
@@ -170,6 +170,12 @@ def get_pending_actions(
 
     kwargs = {"FilterExpression": filter_expr} if filter_expr is not None else {}
     return _paginate(table.scan, kwargs)
+
+
+def list_actions(client_id: str | None = None) -> list[dict[str, Any]]:
+    """Return every action (all statuses) for the activity log, optionally for a
+    single client."""
+    return get_pending_actions(status=None, client_id=client_id)
 
 
 def _paginate(operation, kwargs: dict[str, Any]) -> list[dict[str, Any]]:
