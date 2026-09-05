@@ -189,6 +189,7 @@ def check_due_dates(client: dict, today: str) -> list[dict]:
                 schema.CLIENT_ID: client_id,
                 schema.ACTION_TYPE: "dunning_email",
                 schema.ESCALATION_TIER: tier,
+                "invoice_id": invoice.get("invoice_id", ""),
                 schema.DRAFTED_CONTENT: draft,
                 schema.AGENT_REASONING: _reasoning(tier, invoice, today),
                 REQUIRES_HUMAN_APPROVAL: True,

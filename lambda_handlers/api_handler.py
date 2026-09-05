@@ -100,11 +100,15 @@ def _client_summary(client: dict) -> dict[str, Any]:
 
 def _list_clients() -> dict[str, Any]:
     clients = dynamo_client.list_clients()
+    clients.sort(key=lambda c: (c.get(schema.NAME) or "").lower())
     return _ok([_client_summary(c) for c in clients])
 
 
 def _list_pending() -> dict[str, Any]:
     actions = dynamo_client.get_pending_actions(status=schema.STATUS_PENDING)
+    # Oldest first so the Approvals panel is stable across refreshes and the
+    # human works the queue top-down (creation order, not DynamoDB scan order).
+    actions.sort(key=lambda a: a.get(schema.CREATED_AT) or "")
     enriched = [_enrich_action(a) for a in actions]
     return _ok(enriched)
 

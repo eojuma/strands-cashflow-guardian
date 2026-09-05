@@ -208,3 +208,32 @@ def test_executing_approved_invoice_records_to_payment_history(db):
     assert history[0]["status"] == "unpaid"
     assert history[0]["milestone_id"] == "mvp"
     assert history[0]["amount"] == 2400.0
+
+
+def test_executing_approved_dunning_records_to_tone_log(db):
+    _seed_client()
+    action = _seed_action(
+        action_type="dunning_email",
+        escalation_tier="day_7",
+        invoice_id="inv_002",
+    )
+    send, calls = _fake_send()
+
+    result = orchestrator.resolve_action(
+        action[schema.ACTION_ID], "approved", send_fn=send
+    )
+
+    assert result[schema.ACTION_STATUS] == schema.STATUS_EXECUTED
+    assert len(calls) == 1
+    client = dynamo_client.get_client("client_001")
+    tone_log = client[schema.TONE_LOG]
+    assert len(tone_log) == 1
+    entry = tone_log[0]
+    assert entry["escalation_tier"] == "day_7"
+    assert entry["invoice_id"] == "inv_002"
+    assert "inv_002" in entry["summary"]
+
+    # Once a tier is on the tone_log the ladder never proposes it again: the
+    # invoice here is 7 days past due (day_7 applicable) yet already logged.
+    overdue = {"status": "unpaid", "invoice_id": "inv_002", "due_date": "2026-08-18"}
+    assert invoice_dunning.determine_next_tier(overdue, tone_log, "2026-08-25") is None

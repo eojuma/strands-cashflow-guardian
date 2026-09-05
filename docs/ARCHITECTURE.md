@@ -179,8 +179,9 @@ flowchart TB
 | `email` | String | Client's contact email |
 | `sow_terms` | String (JSON) | Structured SOW: deliverables, hourly rate, included revision count |
 | `billing_rate` | Number | Hourly or per-milestone rate in USD |
-| `payment_history` | List<Map> | `[{invoice_id, amount, due_date, paid_date, status}]` |
-| `tone_log` | List<Map> | `[{date, escalation_tier, summary}]` — used so the agent never re-escalates inconsistently |
+| `payment_history` | List<Map> | `[{invoice_id, milestone_id?, amount, due_date, paid_date?, status}]` — appended when an approved invoice is executed (§8.1) |
+| `tone_log` | List<Map> | `[{date, escalation_tier, invoice_id?, summary}]` — seeded for demos and appended after an approved dunning email is sent (§8.2), so the agent never re-escalates the same tier |
+| `milestones` | List<Map> | `[{milestone_id, name, amount, status, completed_at}]` — `status` is `complete` until an invoice is proposed, then `invoiced` |
 | `created_at` | String (ISO 8601) | |
 | `updated_at` | String (ISO 8601) | |
 
@@ -197,6 +198,12 @@ flowchart TB
 | `status` | String | `pending`, `approved`, `edited`, `rejected`, `executed` |
 | `created_at` | String (ISO 8601) | |
 | `resolved_at` | String (ISO 8601) or null | Set when status leaves `pending` |
+
+Actions may also carry structured fields alongside the free-text reasoning so
+later steps never have to parse prose: `invoice` actions store
+`milestone_id`/`amount`/`due_date` (used to append to `payment_history` on
+execution) and `dunning_email` actions store `invoice_id`/`escalation_tier`
+(used to append to `tone_log` on execution).
 
 **Why `agent_reasoning` is its own field, not buried in logs:** the Scope Sentinel's value proposition *is* its reasoning — a judge (and the dashboard) needs to read "flagged because this request adds ~3 hours beyond the two-revision limit in the SOW," not just see a generated invoice with no explanation attached.
 
@@ -252,8 +259,20 @@ def execute_action(action_id):
     if action["status"] not in ("approved", "edited"):
         return  # hard guard — the §7 invariant
 
-    if action["action_type"] in ("invoice", "change_order", "dunning_email"):
-        gmail_tool.send_email(action["client_id"], action["drafted_content"])
+    # Perform the external side effect (Gmail send; the "send_fn" is swappable
+    # so dry runs / demos log instead).
+    send_fn(to=client["email"], subject=action["action_type"],
+            body=action["drafted_content"])
+
+    # Persist the consequence so future scheduled runs stay idempotent:
+    if action["action_type"] == "invoice":
+        # New unpaid invoice appended to payment_history -> the dunning ladder
+        # can now escalate it (and the milestone was already flipped "invoiced").
+        dynamo_client.update_client(client_id, {payment_history: history + [invoice]})
+    elif action["action_type"] == "dunning_email":
+        # The sent tier is appended to tone_log so it is never re-proposed/sent.
+        dynamo_client.update_client(client_id, {tone_log: tone_log + [entry]})
+
     dynamo_client.update_action_status(action_id, "executed")
 ```
 
@@ -323,17 +342,27 @@ approved   edited   rejected
 
 ### 8.1 Flow: Milestone Complete → Invoice Sent
 
-The dashboard currently demonstrates this interaction locally: clicking **Mark
-milestone complete** shows a generating state and creates a unique invoice draft
-in Pending Approvals. The persisted production flow is the next backend step:
+Implemented end to end:
 
-1. Add a milestone-complete REST endpoint and persist the milestone against the client.
-2. Generate the PDF through `generate_invoice_pdf()`.
-3. Persist an `invoice` action as `pending`.
-4. Reuse the existing Approve/Edit/Reject execution path.
-
-The approval state machine and PDF tool already exist; only milestone persistence
-and endpoint wiring remain.
+1. A milestone is recorded as `complete` on the client — either seeded by
+   `scripts/seed_demo_data.py` or created live via `POST
+   /clients/{client_id}/milestone-complete` (the dashboard's **Mark milestone
+   complete** action).
+2. The next scheduled pass (EventBridge rule or the dashboard's **Run scheduled
+   check** button) reaches the same idempotent helper
+   `orchestrator_handler._propose_milestone_invoices()`: it calls
+   `invoice_dunning.check_milestones()`, which drafts the PDF via
+   `generate_invoice_pdf()` and returns an `invoice` action carrying
+   `amount`/`due_date`/`milestone_id`.
+3. The milestone's status is flipped `complete` → `invoiced` **before** the
+   proposal is persisted, so a milestone is never invoiced twice even though the
+   EventBridge rule and the dashboard button both call the same function.
+4. The `invoice` action is persisted as `pending` and surfaces in the Approvals
+   panel.
+5. On **Approve / Edit**, `execute_action` sends (or logs) the invoice, appends
+   it to the client's `payment_history` as `unpaid`, and marks the action
+   `executed` — which is exactly what the dunning ladder (§8.2) needs to start
+   escalating it.
 
 ### 8.2 Flow: Overdue Invoice → Escalation
 
@@ -360,7 +389,10 @@ and endpoint wiring remain.
 
 ## 9. Frontend ↔ Backend Contract
 
-The frontend needs a minimal REST surface. If not building a separate API Gateway layer, a simple set of Lambda Function URLs or a lightweight API Gateway in front of `lambda_handlers/` is sufficient.
+A single stateless `lambda_handlers/api_handler.py` module serves the whole
+contract through one API Gateway HTTP API (`CommandCenterApi` in
+`infra/template.yaml`), and `scripts/serve_api.py` runs the same module locally
+for development.
 
 | Endpoint | Method | Purpose |
 |---|---|---|
@@ -368,10 +400,11 @@ The frontend needs a minimal REST surface. If not building a separate API Gatewa
 | `/actions/pending` | GET | List all `pending` actions (for Approvals panel) |
 | `/actions/{action_id}/resolve` | POST | Body: `{decision: "approved" \| "edited" \| "rejected", edited_content?: string}` |
 | `/activity-log` | GET | Returns recent resolved actions + their `agent_reasoning`, for the Activity Log panel |
-The first four endpoints are implemented in `lambda_handlers/api_handler.py`.
-The milestone-complete interaction currently runs as a screenshot-ready frontend prototype; its persisted REST endpoint remains future work.
+| `/run-scheduled-check` | POST | Manually run one scheduled pass (what the EventBridge rule does every 15 minutes) so the dashboard's **Run scheduled check** button doesn't wait |
+| `/clients/{client_id}/milestone-complete` | POST | Body: `{name, amount}` — records a completed milestone and proposes its invoice (§8.1) |
 
-Keep this contract this small. Every additional endpoint is additional Phase 3 surface area you don't have slack for.
+`api_handler.route()` parses these REST-style paths directly and is covered by
+`tests/test_lambda_handlers.py` and the end-to-end dry run.
 
 ---
 
@@ -392,7 +425,7 @@ The SAM and IAM shape are covered by local tests. Live AWS deployment remains pe
 Build these in, don't leave them as "would be nice":
 
 - **Gmail API rate limits / auth token expiry** — wrap `gmail_tool` calls in retry-with-backoff; if the token has expired, fail loudly in logs rather than silently skipping a check.
-- **Duplicate escalation prevention** — the `tone_log` check in §8.2 step 2 is not optional. Without it, a bug could send the same overdue notice repeatedly on every 15-minute Orchestrator run.
+- **Duplicate escalation prevention** — the `tone_log` check in §8.2 step 2 is not optional. Without it, a bug could send the same overdue notice repeatedly on every 15-minute Orchestrator run. That is why an approved send *also* appends to `tone_log` (§8.2 step 7): the next pass sees the tier already logged and proposes nothing until the next threshold.
 - **LLM misclassification** — the Scope Sentinel will occasionally get in-scope/out-of-scope wrong. This is exactly why nothing auto-sends: a human catches this at the approval step, and it's worth saying so explicitly in your demo video as a feature, not hiding it as a limitation.
 - **Empty states** — dashboard should render sensibly with zero pending actions ("All caught up") rather than a blank panel; this is a 10-minute fix that meaningfully improves the "complete product experience" impression.
 

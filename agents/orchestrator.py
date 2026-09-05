@@ -17,6 +17,7 @@ runs with a model-id string and no network call.
 from __future__ import annotations
 
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -149,6 +150,8 @@ def execute_action(action_id: str, send_fn=None) -> bool:
     )
     if action.get(schema.ACTION_TYPE) == "invoice":
         _record_executed_invoice(client, action)
+    elif action.get(schema.ACTION_TYPE) == "dunning_email":
+        _record_sent_dunning(client, action)
     dynamo_client.update_action_status(action_id, schema.STATUS_EXECUTED)
     return True
 
@@ -175,6 +178,44 @@ def _record_executed_invoice(client: dict, action: dict) -> None:
         }
     )
     dynamo_client.update_client(client_id, {schema.PAYMENT_HISTORY: history})
+
+
+_TIER_LABELS = {
+    "day_3": "Friendly reminder",
+    "day_7": "Overdue notice",
+    "day_14": "Final notice",
+}
+
+
+def _record_sent_dunning(client: dict, action: dict) -> None:
+    """After an approved dunning email is sent, append it to the client's
+    ``tone_log`` so the ladder never re-sends (or re-proposes) the same tier
+    (flow §8.2 / docs/ARCHITECTURE.md §11).
+
+    Uses the ``escalation_tier`` and ``invoice_id`` carried on the proposed
+    action; the entry mirrors the shape seeded by ``scripts/seed_demo_data.py``.
+    """
+    client_id = action.get(schema.CLIENT_ID)
+    if not client_id or not client:
+        return
+
+    tier = action.get(schema.ESCALATION_TIER)
+    if not tier:
+        return
+    invoice_id = action.get("invoice_id") or ""
+    label = _TIER_LABELS.get(tier, tier)
+    summary = f"{label} sent for invoice {invoice_id}." if invoice_id else f"{label} sent."
+
+    tone_log = list(client.get(schema.TONE_LOG) or [])
+    tone_log.append(
+        {
+            "date": datetime.now(timezone.utc).isoformat(),
+            "escalation_tier": tier,
+            "invoice_id": invoice_id,
+            "summary": summary,
+        }
+    )
+    dynamo_client.update_client(client_id, {schema.TONE_LOG: tone_log})
 
 
 def resolve_action(
