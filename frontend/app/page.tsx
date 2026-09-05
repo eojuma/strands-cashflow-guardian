@@ -5,7 +5,9 @@ import {
   listActivityLog,
   listClients,
   listPendingActions,
+  resolveAction,
   runScheduledCheck,
+  seededDesk,
   type Client,
   type PendingAction,
   type ScheduledCheckSummary,
@@ -21,6 +23,14 @@ export default function Dashboard() {
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [checking, setChecking] = useState(false)
+  const [offline, setOffline] = useState(false)
+
+  const showSeededDesk = useCallback(() => {
+    setOffline(true)
+    setClients(seededDesk.clients)
+    setPending(seededDesk.pending)
+    setActivity(seededDesk.activity)
+  }, [])
 
   const refresh = useCallback(async () => {
     setError(null)
@@ -33,16 +43,26 @@ export default function Dashboard() {
       setClients(c)
       setPending(p)
       setActivity(a)
+      setOffline(false)
     } catch (err) {
+      // No reachable API: fall back to the static seeded review desk so the
+      // dashboard still demos well with zero infrastructure.
+      showSeededDesk()
       setError(err instanceof Error ? err.message : "Failed to load data")
     }
-  }, [])
+  }, [showSeededDesk])
 
   useEffect(() => {
     refresh()
   }, [refresh])
 
   async function handleRunCheck() {
+    if (offline) {
+      setNotice(
+        "Seeded desk is a static snapshot — connect the live API to run a real scheduled check.",
+      )
+      return
+    }
     setChecking(true)
     setError(null)
     try {
@@ -64,7 +84,30 @@ export default function Dashboard() {
     }
   }
 
-  async function handleResolved() {
+  async function handleResolve(
+    action: PendingAction,
+    decision: "approved" | "edited" | "rejected",
+    editedContent?: string,
+  ) {
+    if (offline) {
+      const updated: PendingAction = {
+        ...action,
+        status: decision === "rejected" ? "rejected" : "executed",
+        drafted_content: editedContent || action.drafted_content,
+        resolved_at: new Date().toISOString(),
+      }
+      setPending((current) =>
+        current.filter((item) => item.action_id !== action.action_id),
+      )
+      setActivity((current) => [updated, ...current])
+      setNotice(
+        decision === "rejected"
+          ? "Rejected — nothing was sent (seeded desk, local only)."
+          : "Approved in the seeded desk — connect the live API to send for real.",
+      )
+      return
+    }
+    await resolveAction(action.action_id, decision, editedContent)
     await refresh()
   }
 
@@ -89,9 +132,24 @@ export default function Dashboard() {
         </button>
       </header>
 
+      {offline && (
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <span>
+            Live API unavailable — showing the <strong>seeded review desk</strong>.
+            Approvals here are local to this browser and are not persisted or
+            sent.
+          </span>
+          <button
+            onClick={refresh}
+            className="rounded-md border border-amber-300 bg-white px-3 py-1 text-xs font-medium text-amber-800 hover:bg-amber-100"
+          >
+            Try live data
+          </button>
+        </div>
+      )}
       {error && (
         <div className="mb-6 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error} — check that the API base URL is configured.
+          {error}
         </div>
       )}
       {notice && (
@@ -104,11 +162,16 @@ export default function Dashboard() {
         <div className="lg:col-span-1">
           <ClientsPanel
             clients={clients}
+            offline={offline}
             onMilestoneComplete={refresh}
           />
         </div>
         <div className="lg:col-span-2">
-          <ApprovalsPanel pending={pending} onResolved={handleResolved} />
+          <ApprovalsPanel
+            pending={pending}
+            offline={offline}
+            onResolve={handleResolve}
+          />
         </div>
       </div>
 

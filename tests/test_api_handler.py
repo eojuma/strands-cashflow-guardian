@@ -16,12 +16,37 @@ def db(monkeypatch):
     monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "testing")
     with mock_aws():
         dynamo_client.create_tables()
-        dynamo_client.put_client({schema.CLIENT_ID: "c1", schema.NAME: "Client", schema.EMAIL: "client@example.com", schema.SOW_TERMS: "{}", schema.BILLING_RATE: 75})
+        dynamo_client.put_client(
+            {
+                schema.CLIENT_ID: "c1",
+                schema.NAME: "Client",
+                schema.EMAIL: "client@example.com",
+                schema.SOW_TERMS: "{}",
+                schema.BILLING_RATE: 75,
+            }
+        )
         yield
 
 
+@pytest.fixture
+def sends(monkeypatch):
+    """Capture external sends instead of calling Gmail."""
+    calls = []
+
+    def fake_send(to, subject, body):
+        calls.append({"to": to, "subject": subject, "body": body})
+        return True
+
+    monkeypatch.setattr(api_handler, "_gmail_send_email", fake_send)
+    return calls
+
+
 def event(method, path, body=None):
-    return {"rawPath": path, "requestContext": {"http": {"method": method}}, "body": json.dumps(body) if body is not None else None}
+    return {
+        "rawPath": path,
+        "requestContext": {"http": {"method": method}},
+        "body": json.dumps(body) if body is not None else None,
+    }
 
 
 def body(response):
@@ -29,24 +54,74 @@ def body(response):
 
 
 def test_lists_clients_and_pending_actions(db):
-    dynamo_client.create_pending_action({schema.CLIENT_ID: "c1", schema.ACTION_TYPE: "dunning_email", schema.DRAFTED_CONTENT: "Reminder", schema.AGENT_REASONING: "Invoice overdue"})
+    dynamo_client.create_pending_action(
+        {
+            schema.CLIENT_ID: "c1",
+            schema.ACTION_TYPE: "dunning_email",
+            schema.DRAFTED_CONTENT: "Reminder",
+            schema.AGENT_REASONING: "Invoice overdue",
+        }
+    )
     assert len(body(api_handler.lambda_handler(event("GET", "/clients"), None))) == 1
     assert len(body(api_handler.lambda_handler(event("GET", "/actions/pending"), None))) == 1
 
 
-def test_approve_executes_and_moves_action_to_activity(db):
-    action = dynamo_client.create_pending_action({schema.CLIENT_ID: "c1", schema.ACTION_TYPE: "dunning_email", schema.DRAFTED_CONTENT: "Reminder", schema.AGENT_REASONING: "Invoice overdue"})
-    calls = []
-    response = api_handler.lambda_handler(event("POST", f"/actions/{action[schema.ACTION_ID]}/resolve", {"decision": "approved"}), None, send_fn=lambda **kwargs: calls.append(kwargs))
+def test_approve_executes_and_moves_action_to_activity(db, sends):
+    action = dynamo_client.create_pending_action(
+        {
+            schema.CLIENT_ID: "c1",
+            schema.ACTION_TYPE: "dunning_email",
+            schema.DRAFTED_CONTENT: "Reminder",
+            schema.AGENT_REASONING: "Invoice overdue",
+        }
+    )
+    response = api_handler.lambda_handler(
+        event("POST", f"/actions/{action[schema.ACTION_ID]}/resolve", {"decision": "approved"}),
+        None,
+    )
     assert response["statusCode"] == 200
     assert body(response)[schema.ACTION_STATUS] == schema.STATUS_EXECUTED
-    assert len(calls) == 1
+    assert len(sends) == 1
+    assert sends[0]["to"] == "client@example.com"
     assert len(body(api_handler.lambda_handler(event("GET", "/activity-log"), None))) == 1
 
 
-def test_reject_has_no_external_side_effect(db):
-    action = dynamo_client.create_pending_action({schema.CLIENT_ID: "c1", schema.ACTION_TYPE: "change_order", schema.DRAFTED_CONTENT: "file.pdf", schema.AGENT_REASONING: "Outside SOW"})
-    calls = []
-    response = api_handler.lambda_handler(event("POST", f"/actions/{action[schema.ACTION_ID]}/resolve", {"decision": "rejected"}), None, send_fn=lambda **kwargs: calls.append(kwargs))
+def test_edit_sends_edited_content(db, sends):
+    action = dynamo_client.create_pending_action(
+        {
+            schema.CLIENT_ID: "c1",
+            schema.ACTION_TYPE: "dunning_email",
+            schema.DRAFTED_CONTENT: "Original draft",
+            schema.AGENT_REASONING: "Invoice overdue",
+        }
+    )
+    edited = "Subject: Edited reminder\n\nPlease review."
+    response = api_handler.lambda_handler(
+        event(
+            "POST",
+            f"/actions/{action[schema.ACTION_ID]}/resolve",
+            {"decision": "edited", "edited_content": edited},
+        ),
+        None,
+    )
+    assert response["statusCode"] == 200
+    assert body(response)[schema.ACTION_STATUS] == schema.STATUS_EXECUTED
+    assert sends[0]["body"] == edited
+
+
+def test_reject_has_no_external_side_effect(db, sends):
+    action = dynamo_client.create_pending_action(
+        {
+            schema.CLIENT_ID: "c1",
+            schema.ACTION_TYPE: "change_order",
+            schema.DRAFTED_CONTENT: "file.pdf",
+            schema.AGENT_REASONING: "Outside SOW",
+        }
+    )
+    response = api_handler.lambda_handler(
+        event("POST", f"/actions/{action[schema.ACTION_ID]}/resolve", {"decision": "rejected"}),
+        None,
+    )
+    assert response["statusCode"] == 200
     assert body(response)[schema.ACTION_STATUS] == schema.STATUS_REJECTED
-    assert calls == []
+    assert sends == []

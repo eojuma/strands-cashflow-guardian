@@ -12,9 +12,11 @@ function currency(value: number): string {
 
 export default function ClientsPanel({
   clients,
+  offline,
   onMilestoneComplete,
 }: {
   clients: Client[]
+  offline: boolean
   onMilestoneComplete: () => void
 }) {
   const [open, setOpen] = useState<string | null>(null)
@@ -79,12 +81,14 @@ export default function ClientsPanel({
               </div>
             </div>
             <div className="mt-2 flex justify-end">
-              <button
-                onClick={() => setOpen(open === client.client_id ? null : client.client_id)}
-                className="rounded-md border border-slate-300 px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
-              >
-                Mark milestone complete
-              </button>
+              {!offline && (
+                <button
+                  onClick={() => setOpen(open === client.client_id ? null : client.client_id)}
+                  className="rounded-md border border-slate-300 px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                >
+                  Mark milestone complete
+                </button>
+              )}
             </div>
             {open === client.client_id && (
               <div className="mt-2 rounded-md border border-slate-200 bg-slate-50 p-3">
@@ -118,6 +122,12 @@ export default function ClientsPanel({
           </li>
         ))}
       </ul>
+      {offline && (
+        <p className="mt-4 border-t border-slate-100 pt-3 text-xs text-slate-400">
+          Seeded desk — connect the live API to record milestones and propose
+          invoices.
+        </p>
+      )}
     </section>
   )
 }

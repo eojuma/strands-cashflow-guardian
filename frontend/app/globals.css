@@ -1,3 +1,55 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Approval stamp — brief visual confirmation when an action is resolved
+   (port of the ledger UI's stamp language onto the live dashboard). */
+.approval-stamp {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 10;
+  padding: 2px 9px;
+  border: 2px solid currentColor;
+  background: rgba(255, 255, 255, 0.85);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  line-height: 1.4;
+  text-transform: uppercase;
+  transform: rotate(3deg);
+  pointer-events: none;
+  box-shadow: 0 0 0 1px currentColor, 1px 1px 0 currentColor;
+  animation: approval-stamp-in 0.18s ease-out both;
+}
+
+.approval-stamp-approved {
+  color: #047857;
+}
+
+.approval-stamp-edited {
+  color: #92400e;
+}
+
+.approval-stamp-declined {
+  color: #b91c1c;
+}
+
+@keyframes approval-stamp-in {
+  from {
+    opacity: 0;
+    transform: rotate(-6deg) scale(1.5);
+  }
+  to {
+    opacity: 1;
+    transform: rotate(3deg) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .approval-stamp {
+    animation: none;
+    transform: none;
+  }
+}

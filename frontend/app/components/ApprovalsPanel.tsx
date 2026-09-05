@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { resolveAction, type PendingAction } from "@/lib/api"
+import type { PendingAction } from "@/lib/api"
 
 const TYPE_LABELS: Record<string, string> = {
   invoice: "Invoice",
@@ -25,43 +25,68 @@ function tierLabel(tier?: string | null): string {
   return map[tier] ?? tier
 }
 
+const STAMP_LABELS: Record<string, string> = {
+  approved: "APPROVED",
+  edited: "EDITED",
+  rejected: "DECLINED",
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
 export default function ApprovalsPanel({
   pending,
-  onResolved,
+  offline,
+  onResolve,
 }: {
   pending: PendingAction[]
-  onResolved: () => void
+  offline: boolean
+  onResolve: (
+    action: PendingAction,
+    decision: "approved" | "edited" | "rejected",
+    editedContent?: string,
+  ) => Promise<void>
 }) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editText, setEditText] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
+  const [stamp, setStamp] = useState<{ id: string; kind: string } | null>(null)
 
   async function act(
     action: PendingAction,
     decision: "approved" | "edited" | "rejected",
   ) {
+    const content =
+      decision === "edited" ? editText.trim() || action.drafted_content : undefined
+
     setError(null)
     setBusy(action.action_id)
+    // Land the stamp on the slip before the action leaves the pending list.
+    setStamp({ id: action.action_id, kind: decision })
     try {
-      const content =
-        decision === "edited"
-          ? editText || action.drafted_content
-          : undefined
-      await resolveAction(action.action_id, decision, content)
+      await sleep(500)
+      await onResolve(action, decision, content)
       setEditingId(null)
-      onResolved()
+      setEditText("")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to resolve action")
     } finally {
       setBusy(null)
+      setStamp(null)
     }
   }
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+    <section className="relative rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Pending Approvals</h2>
+        <h2 className="text-lg font-semibold">
+          Pending Approvals
+          {offline && (
+            <span className="ml-2 align-middle rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+              seeded desk
+            </span>
+          )}
+        </h2>
         <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
           {pending.length}
         </span>
@@ -85,8 +110,23 @@ export default function ApprovalsPanel({
           {pending.map((action) => (
             <li
               key={action.action_id}
-              className="rounded-lg border border-slate-200 p-4"
+              className="relative rounded-lg border border-slate-200 p-4"
             >
+              {stamp?.id === action.action_id && (
+                <span
+                  className={`approval-stamp ${
+                    stamp.kind === "rejected"
+                      ? "approval-stamp-declined"
+                      : stamp.kind === "edited"
+                        ? "approval-stamp-edited"
+                        : "approval-stamp-approved"
+                  }`}
+                  aria-hidden="true"
+                >
+                  {STAMP_LABELS[stamp.kind] ?? stamp.kind.toUpperCase()}
+                </span>
+              )}
+
               <div className="flex flex-wrap items-center gap-2">
                 <span
                   className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset ${

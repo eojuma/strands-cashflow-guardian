@@ -116,6 +116,11 @@ The dashboard proxies `/api/*` to `localhost:8000` in dev. Use **Run scheduled
 check** to trigger a pass instantly (the deployed EventBridge rule does this
 automatically every 15 minutes), then **Approve / Edit / Reject** actions.
 
+> **No backend handy?** If the API is unreachable, the dashboard falls back to a
+> static **seeded review desk** (the same personas as `seed_demo_data.py`) so it
+> still renders for screenshots and demo recordings. Approvals there are local
+> to the browser only — connect the live API for real sends.
+
 ### 4b. Deploy infrastructure
 
 ```bash
@@ -144,8 +149,23 @@ Open `http://localhost:3000` to view the Command Center dashboard.
 ## Running Tests
 
 ```bash
-pytest tests/
+python -m pytest -q
 ```
+
+The suite uses Moto for DynamoDB and needs no AWS credentials.
+
+## Current Implementation Status
+
+Implemented and covered locally: the Strands specialist agents, deterministic
+dunning and scope classification, PDF/Gmail tools, DynamoDB memory,
+milestone-to-invoice proposals, the human-in-the-loop approval state machine,
+the scheduled-check and dashboard REST API handlers, the Next.js Command Center
+(with an offline seeded-desk fallback), the least-privilege SAM template, demo
+personas, and the deterministic end-to-end dry run.
+
+Still requiring external configuration or manual completion: live Bedrock/AWS
+smoke testing, Gmail OAuth and real sends, public frontend hosting, the final
+architecture image, the recorded demo video, and the Devpost submission.
 
 ---
 
@@ -175,4 +195,5 @@ Licensed under the MIT License. See [`LICENSE`](./LICENSE) for details.
 - **Track:** Professional Agents
 - **Event:** AWS "Agents for Humans" Hackathon
 - Architecture diagram: [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)
+- Demo narration/shot list: [`demo/video_script.md`](./demo/video_script.md)
 - Demo video: _link added at submission_
