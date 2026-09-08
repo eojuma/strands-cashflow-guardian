@@ -116,7 +116,7 @@ strands-cashflow-guardian/
 │
 └── demo/
     ├── video_script.md
-    └── architecture-diagram.png     # Final rendered asset pending
+    └── architecture-diagram.png     # Rendered from the mermaid in §3; embedded in README
 ```
 
 **Rule of thumb while building:** if you're about to create a file not listed here, stop and ask whether it belongs in an existing file instead. Every file above earns its place by being referenced in a specific flow below — that's what keeps a solo 23-day build from sprawling.
@@ -124,6 +124,9 @@ strands-cashflow-guardian/
 ---
 
 ## 3. System Diagram
+
+This block is the canonical source. `demo/architecture-diagram.png` is rendered
+from it (see README) — edit here, then re-render if the diagram changes.
 
 ```mermaid
 flowchart TB

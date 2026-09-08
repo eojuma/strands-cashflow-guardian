@@ -3,10 +3,12 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .venv/
+venv/
 generated/
 
 # Env / secrets
 .env
+.env.local
 credentials/
 
 # Node / Next.js

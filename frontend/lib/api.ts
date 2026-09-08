@@ -193,6 +193,18 @@ export const seededDesk: SeededDesk = {
       created_at: "2026-09-03T09:00:00Z",
     },
     {
+      action_id: "seed_change_order_lumen",
+      client_id: "client_scope",
+      client_name: "Lumen & Co",
+      action_type: "change_order",
+      drafted_content: "generated/change_order_lumen_dark_mode.pdf",
+      agent_reasoning:
+        "Dark mode toggle is not listed in Lumen & Co's SOW; estimated 3 hours at $75.00/hr = $225.00 change order.",
+      status: "pending",
+      amount: 225,
+      created_at: "2026-09-03T09:00:00Z",
+    },
+    {
       action_id: "seed_invoice_lumen",
       client_id: "client_scope",
       client_name: "Lumen & Co",

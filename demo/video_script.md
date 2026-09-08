@@ -4,7 +4,13 @@ Target runtime: **4:35–4:50**. Keep the final export below 5:00.
 
 ## Recording checklist
 
-- Seeded Command Center visible with three clients and two pending approvals.
+- Seeded Command Center visible with **five clients and four pending approvals**:
+  Acme Goodpay (paid on time), Northwind Traders (day_3 check-in), Beta Analytics
+  (day_14 final notice), and Lumen & Co (a $225 change order and a $2,400
+  milestone invoice).
+- Everything below can be filmed against the dashboard's **offline seeded desk**
+  (no API, no AWS, no Gmail needed). Approvals resolve locally; record clean
+  clips separately and assemble them in order.
 - Browser zoom and terminal text readable at 1080p.
 - Record clean clips separately; assemble them in the order below.
 - Keep cursor movement deliberate. Pause briefly after each stamp interaction.
@@ -20,11 +26,11 @@ Target runtime: **4:35–4:50**. Keep the final export below 5:00.
 
 ## 0:35–1:25 — Scope Creep Sentinel
 
-**Screen:** Focus the Aster House client, then the pending change-order card. Hold on the reasoning text and `$225.00` amount.
+**Screen:** Focus the Lumen & Co client, then the pending change-order card. Hold on the reasoning text and `$225.00` amount.
 
 **Narration:**
 
-> Aster House asked for a dark mode toggle. The Scope Creep Sentinel compares that request with the client's stored Statement of Work in DynamoDB memory. Dark mode is not an agreed deliverable, so the agent estimates three additional hours at seventy-five dollars per hour and drafts a two-hundred-and-twenty-five-dollar change order. The important part is not only the document. The agent explains the judgment directly: what fell outside scope, the estimated effort, and the rate used.
+> Lumen & Co asked for a dark mode toggle. The Scope Creep Sentinel compares that request with the client's stored Statement of Work in DynamoDB memory. Dark mode is not an agreed deliverable, so the agent estimates three additional hours at seventy-five dollars per hour and drafts a two-hundred-and-twenty-five-dollar change order. The important part is not only the document. The agent explains the judgment directly: what fell outside scope, the estimated effort, and the rate used.
 
 **Action:** Click **Edit**, briefly show the inline draft, then cancel.
 
@@ -32,31 +38,35 @@ Target runtime: **4:35–4:50**. Keep the final export below 5:00.
 
 ## 1:25–2:15 — Invoice and dunning escalation
 
-**Screen:** Focus Marcus Chen's overdue client record and the Day+7 payment notice.
+**Screen:** Focus Beta Analytics's overdue record and the Day+14 final notice.
 
 **Narration:**
 
-> Marcus Chen's invoice is eight days overdue. The Invoice and Dunning agent selects the Day plus seven tier, checks the tone log so that tier has not already been sent, calculates the applicable fee, and passes the draft through a professional tone guardrail. Day plus three is a friendly check-in, Day plus seven is formal, and Day plus fourteen can warn that work will pause. The escalation changes with the situation, but aggression is never the goal.
-
-**Action:** Click **Reject** on one seeded action and hold on the rust `DECLINED` stamp.
-
-> If the judgment is wrong or the relationship needs a different approach, Reject ends the flow with no external side effect.
+> Beta Analytics's invoice is twenty days overdue. The Invoice and Dunning agent selects the Day plus fourteen tier, checks the tone log so that tier has not already been sent, calculates the applicable fee, and passes the draft through a professional tone guardrail. Day plus three is a friendly check-in, Day plus seven is formal, and Day plus fourteen can warn that work will pause. The escalation changes with the situation, but aggression is never the goal.
 
 ## 2:15–3:05 — Human-in-the-loop control
 
-**Screen:** Click **Approve** on the remaining action. Hold on the green `APPROVED` stamp, then show the Activity Log.
+**Screen:** Click **Reject** on Northwind's day_3 check-in and hold on the rust `DECLINED` stamp, then click **Approve** on Beta Analytics's day_14 notice and hold on the green `APPROVED` stamp.
 
 **Narration:**
 
-> This is CashflowGuardian's central human-in-the-loop rule. No email is sent and no invoice is finalized until the user approves or edits the exact persisted content. Approval is not a suggestion to the model. The deterministic execution path re-reads the stored status and sends the approved bytes without asking the LLM to rewrite them. The activity ledger records the outcome and the agent's reasoning for auditability.
+> This is CashflowGuardian's central human-in-the-loop rule. No email is sent and no invoice is finalized until the user approves or edits the exact persisted content. Reject ends the flow with no external side effect — if the judgment is wrong or the relationship needs a different approach, that is a valid decision. Approval is not a suggestion to the model. The deterministic execution path re-reads the stored status and sends the approved bytes without asking the LLM to rewrite them.
+
+**Action:** After approving, show the Activity Log with the executed notice and its `agent_reasoning`.
+
+> The activity ledger records the outcome and the agent's reasoning for auditability.
 
 ## 3:05–3:35 — Milestone to invoice
 
-**Screen:** Click **Mark milestone complete** for Northstar Studio. Show `Generating invoice…`, then the new invoice approval.
+**Screen:** Focus the Lumen & Co pending invoice card (`$2,400.00` for the MVP launch milestone).
 
 **Narration:**
 
-> For invoicing, the freelancer marks a milestone complete. The system visibly generates the invoice and places it in Pending Approvals. It does not teleport directly to a sent document. The user stays in control at the same decision surface.
+> For invoicing, when a milestone completes the system generates its invoice and places it in Pending Approvals. It does not teleport directly to a sent document. Here is Lumen & Co's invoice for the completed MVP launch milestone — amount, due date, and the agent's reasoning all ready for review.
+
+**Action:** Click **Approve** on the invoice, hold the green `APPROVED` stamp, then show the Activity Log entry.
+
+> The user stays in control at the same decision surface, and once approved the invoice is recorded to the client's payment history so the dunning ladder can follow it if it ever goes unpaid.
 
 ## 3:35–4:20 — Architecture and technical implementation
 
@@ -68,7 +78,7 @@ Target runtime: **4:35–4:50**. Keep the final export below 5:00.
 
 ## 4:20–4:45 — Close
 
-**Screen:** Return to the Command Center populated view, then show the calm empty Pending Approvals state.
+**Screen:** Return to the Command Center populated view, then show the calm empty Pending Approvals state ("All caught up").
 
 **Narration:**
 

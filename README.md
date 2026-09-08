@@ -42,6 +42,20 @@ A freelancer's real accountant would notice a request creeping outside scope, an
 
 ---
 
+## Architecture
+
+![CashflowGuardian system diagram](demo/architecture-diagram.png)
+
+EventBridge invokes the Orchestrator Lambda on a schedule; the Orchestrator
+delegates to the Scope Creep Sentinel and Invoice & Dunning agents as Strands
+tools. They use ReportLab PDF generation, Gmail, and deterministic tone
+guardrails, and read/write the DynamoDB memory layer (`Clients`,
+`PendingActions`). A stateless REST API (`lambda_handlers/api_handler.py`)
+connects the Next.js Command Center to the same human-in-the-loop state machine.
+Full design: [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md).
+
+---
+
 ## Project Structure
 
 ```
@@ -194,6 +208,6 @@ Licensed under the MIT License. See [`LICENSE`](./LICENSE) for details.
 
 - **Track:** Professional Agents
 - **Event:** AWS "Agents for Humans" Hackathon
-- Architecture diagram: [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)
+- Architecture diagram: [`demo/architecture-diagram.png`](./demo/architecture-diagram.png) (source: [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md))
 - Demo narration/shot list: [`demo/video_script.md`](./demo/video_script.md)
 - Demo video: _link added at submission_

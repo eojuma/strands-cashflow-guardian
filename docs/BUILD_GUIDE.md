@@ -54,7 +54,7 @@ It must show, at minimum:
 | Document generation | ReportLab |
 | Email | Gmail API |
 | Deployment | AWS Lambda + EventBridge via SAM (`infra/template.yaml`) |
-| Frontend | Next.js 16 + React 19 + tokenized CSS |
+| Frontend | Next.js 14 + React 18 + Tailwind CSS (with an offline seeded-desk fallback) |
 | Tone guardrails | Constrained prompts + `guardrails_config` tone-check tool (optionally Bedrock Guardrails) |
 
 ## 5. Build Phases
@@ -64,7 +64,7 @@ Four GitHub milestones map one-to-one onto the four phases in `create_issues.sh`
 - **Phase 1: Foundation (Days 1-5) — implemented.** Bedrock/Strands setup, DynamoDB schema, orchestrator skeleton, PDF tool, Gmail tool.
 - **Phase 2: Core Agent Logic (Days 6-13) — implemented and tested.** Escalation ladder, guardrails, Scope Sentinel, and human-in-the-loop state machine.
 - **Phase 3: Product Experience (Days 14-18) — code complete locally.** Dashboard, REST API, SAM resources, demo data, and deterministic dry run are implemented. Live AWS deployment validation remains pending.
-- **Phase 4: Demo & Submission (Days 19-23) — in progress.** The video script is complete; architecture image, final recording/edit, README final pass, builder post, and submission remain.
+- **Phase 4: Demo & Submission (Days 19-23) — in progress.** The video script is complete and aligned with the seeded demo data; the architecture diagram is rendered and embedded in the README. Final recording/edit, README final pass, builder post, and submission remain.
 
 ## 6. Judging Criteria ↔ Build Mapping
 
@@ -107,7 +107,7 @@ Every item below is a hard submission requirement from the Devpost page. None ma
 - [x] **Source code + setup instructions** — README distinguishes offline verification from credentialed AWS/Gmail setup.
 - [ ] **MIT or Apache license visible in the About section** *(Verified: MIT detected.)*
 - [ ] **README** — implementation-reconciled; final screenshots/links remain pending.
-- [ ] **Architecture diagram** — submitted and embedded in README.
+- [ ] **Architecture diagram** — rendered (`demo/architecture-diagram.png`) and embedded in README; Devpost upload pending.
 - [ ] **Demo video ≤ 5:00** — shows the working project end-to-end AND covers problem / who it's for / why it matters.
 - [ ] **AWS Builder ID** — provided with the submission.
 - [ ] *(Optional, scores higher)* **Live demo link** — a running public URL.
