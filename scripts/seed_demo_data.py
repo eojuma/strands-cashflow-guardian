@@ -36,6 +36,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from dotenv import load_dotenv
+
 from memory import dynamo_client, schema
 
 _RATE = 75.0
@@ -153,6 +155,10 @@ def demo_scope_email(today: date | None = None) -> dict:
 
 
 def main() -> None:
+    # Honor the repo-root .env (region, credentials, DynamoDB endpoint) so
+    # seeding works against whichever storage .env points at.
+    load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--reset", action="store_true", help="overwrite existing records")
     args = parser.parse_args()

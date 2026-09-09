@@ -27,6 +27,8 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from dotenv import load_dotenv
+
 from lambda_handlers import api_handler
 
 
@@ -58,6 +60,10 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
+    # Honor the repo-root .env (region, credentials, DynamoDB endpoint, send
+    # mode) so a local backend run picks up everything from one place.
+    load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)

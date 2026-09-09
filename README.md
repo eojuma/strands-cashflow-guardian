@@ -81,6 +81,7 @@ strands-cashflow-guardian/
 - An AWS account with Bedrock model access enabled for Claude
 - AWS CLI and SAM CLI (user-local install is fine — no root required)
 - A Gmail account for sandboxed testing (not your primary inbox)
+- Docker (optional — only for Mode B's DynamoDB Local)
 
 ### 1. Clone and set up the environment
 
@@ -93,7 +94,10 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Fill in `.env` with your AWS region, Bedrock model ID, and Gmail OAuth credentials. Never commit `.env`.
+Fill in `.env` top-to-bottom (each blank field has a comment saying where the
+value comes from): §1 AWS region, §2 AWS identity (or leave blank if using
+`~/.aws`), §3 Bedrock model id, §4 Gmail (optional for dry runs). The seed and
+local API scripts load `.env` automatically. Never commit `.env`.
 
 ### 2. Request Bedrock model access
 
@@ -110,30 +114,89 @@ In the AWS Console, go to Bedrock → Model access, and request access to the Cl
 > For demos and dry runs you can skip Gmail entirely: set `CASHFLOW_SEND_MODE=log`
 > in `.env` and approved sends are logged instead of emailed.
 
-### 4a. Local dry run (no AWS compute needed)
+### 4a. Run the system locally
 
-```bash
-python scripts/seed_demo_data.py     # personas into DynamoDB (or DynamoDB Local)
-python scripts/serve_api.py          # REST API on http://localhost:8000
-```
+There are three ways to run it. Start with Mode A (UI only, zero setup), then
+Mode B if you want real, persistent backend state.
 
-Then in a second terminal:
+> **"I only see the seeded desk — where is the backend?"** That is Mode A below.
+> When the dashboard shows the amber *"Live API unavailable"* banner it means no
+> REST API is reachable, so it is showing a static, browser-only review desk.
+> Start a backend (Mode B or C) and the banner disappears.
+
+#### Mode A — UI preview only (no backend)
 
 ```bash
 cd frontend
 cp .env.local.example .env.local
 npm install
-npm run dev                          # dashboard on http://localhost:3000
+npm run dev          # http://localhost:3000
 ```
 
-The dashboard proxies `/api/*` to `localhost:8000` in dev. Use **Run scheduled
-check** to trigger a pass instantly (the deployed EventBridge rule does this
-automatically every 15 minutes), then **Approve / Edit / Reject** actions.
+Shows the seeded review desk (five personas, four pending approvals). Approvals
+here are local to the browser and are not persisted.
 
-> **No backend handy?** If the API is unreachable, the dashboard falls back to a
-> static **seeded review desk** (the same personas as `seed_demo_data.py`) so it
-> still renders for screenshots and demo recordings. Approvals there are local
-> to the browser only — connect the live API for real sends.
+#### Mode B — full local backend (recommended; no AWS account needed)
+
+Uses Docker to run DynamoDB Local on port **8001**, so the API server keeps the
+default port **8000**.
+
+1. Create and fill `.env` (region + identity; see file comments), then uncomment
+   the DynamoDB Local endpoint:
+
+   ```bash
+   cp .env.example .env        # DYNAMODB_ENDPOINT_URL=http://localhost:8001
+   ```
+
+2. Start DynamoDB Local (Docker):
+
+   ```bash
+   docker run -d --name cashflow-dynamo -p 8001:8000 amazon/dynamodb-local
+   ```
+
+3. Terminal 1 — create the tables + seed personas, then start the API:
+
+   ```bash
+   python scripts/seed_demo_data.py --reset
+   python scripts/serve_api.py          # http://localhost:8000
+   ```
+
+   Sanity check (Terminal 2):
+
+   ```bash
+   curl -s http://localhost:8000/clients    # -> JSON for the 5 personas
+   ```
+
+4. Terminal 3 — frontend:
+
+   ```bash
+   cd frontend
+   cp .env.local.example .env.local
+   npm install
+   npm run dev                          # http://localhost:3000
+   ```
+
+   The dashboard proxies `/api/*` to `localhost:8000` in dev. Use **Run
+   scheduled check** to trigger a pass instantly (the deployed EventBridge rule
+   does this automatically every 15 minutes), then **Approve / Edit / Reject**.
+   Approving persists to DynamoDB and lands in the Activity Log — refresh to
+   confirm. Stop DynamoDB Local later with `docker rm -f cashflow-dynamo`.
+
+Notes:
+
+- **Backend first.** Start `serve_api.py` before the frontend so the first load
+  connects; otherwise the page falls back to the seeded desk until you click
+  **Try live data**.
+- **Ports:** DynamoDB Local = `8001`, local API = `8000`, dashboard = `3000`.
+- **Scope scan needs Gmail.** Without Gmail credentials (§4 of `.env`) the
+  scheduled check runs dunning + milestone invoicing but skips the Scope
+  Sentinel scan.
+- **Mark milestone complete** works only when a live backend is reachable.
+
+#### Mode C — frontend against a deployed API
+
+See §4b (deploy) and §5: set `NEXT_PUBLIC_API_BASE_URL` in
+`frontend/.env.local` to the `ApiEndpoint` URL printed by `deploy.sh`.
 
 ### 4b. Deploy infrastructure
 
@@ -145,13 +208,18 @@ cd infra
 This provisions DynamoDB tables, the scheduled Orchestrator Lambda (EventBridge),
 and the dashboard REST API via AWS SAM. It does **not** deploy the frontend —
 host it on Vercel or Amplify and point `NEXT_PUBLIC_API_BASE_URL` at the printed
-API endpoint.
+API endpoint. Deploy uses your `~/.aws` identity (or `AWS_PROFILE`), not `.env`;
+optional overrides are `STACK_NAME` and `SEND_MODE` (default `log`).
 
-### 5. Run the frontend (against a deployed API)
+### 5. Frontend against the deployed API (Mode C)
+
+> Running locally instead? Use Mode A (UI preview) or Mode B (full local
+> backend) in §4a — those do not need a deployment.
 
 ```bash
 cd frontend
 # set NEXT_PUBLIC_API_BASE_URL to the API endpoint printed by deploy.sh
+cp .env.local.example .env.local
 npm install
 npm run dev                          # or: npm run build && npm start
 ```
