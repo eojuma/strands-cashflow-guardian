@@ -402,6 +402,7 @@ for development.
 
 | Endpoint | Method | Purpose |
 |---|---|---|
+| `/` | GET | Health/info: service name, `status: ok`, and the endpoint list |
 | `/clients` | GET | List all clients with summary status |
 | `/actions/pending` | GET | List all `pending` actions (for Approvals panel) |
 | `/actions/{action_id}/resolve` | POST | Body: `{decision: "approved" \| "edited" \| "rejected", edited_content?: string}` |
@@ -410,7 +411,9 @@ for development.
 | `/clients/{client_id}/milestone-complete` | POST | Body: `{name, amount}` — records a completed milestone and proposes its invoice (§8.1) |
 
 `api_handler.route()` parses these REST-style paths directly and is covered by
-`tests/test_lambda_handlers.py` and the end-to-end dry run.
+`tests/test_lambda_handlers.py` and the end-to-end dry run. `lambda_handler()`
+normalizes a named-stage prefix (e.g. `/prod/clients` → `/clients`) and answers
+`OPTIONS` with CORS headers.
 
 ---
 

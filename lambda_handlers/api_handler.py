@@ -227,6 +227,23 @@ def route(method: str, path: str, body: dict | None = None) -> dict[str, Any]:
     """
     parts = [p for p in path.split("/") if p]
 
+    # Base URL health/info so hitting the deployed endpoint root is useful
+    # rather than an error.
+    if method == "GET" and parts == []:
+        return _ok(
+            {
+                "service": "CashflowGuardian Command Center API",
+                "status": "ok",
+                "endpoints": [
+                    "GET /clients",
+                    "GET /actions/pending",
+                    "GET /activity-log",
+                    "POST /run-scheduled-check",
+                    "POST /clients/{client_id}/milestone-complete",
+                    "POST /actions/{action_id}/resolve",
+                ],
+            }
+        )
     if method == "GET" and parts == ["clients"]:
         return _list_clients()
     if method == "GET" and parts == ["actions", "pending"]:
@@ -257,6 +274,11 @@ def lambda_handler(event: dict | None = None, context: Any = None) -> dict[str, 
     ).upper()
     # v1 keeps the path in 'path'; v2 and Function URLs in 'rawPath'.
     path = event.get("path") or event.get("rawPath") or "/"
+    # With a named (non-$default) stage the path can arrive as "/prod/clients";
+    # strip the stage prefix so route() always sees "/clients".
+    stage = (event.get("requestContext") or {}).get("stage")
+    if stage and stage != "$default" and path.startswith(f"/{stage}"):
+        path = path[len(stage) + 1 :] or "/"
     # Our route() parses the full path string, so pathParameters need not apply.
 
     if method == "OPTIONS":

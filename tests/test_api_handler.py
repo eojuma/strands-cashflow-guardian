@@ -84,6 +84,26 @@ def test_pending_action_reasoning_is_sanitized_for_display(db):
     assert pending[0][schema.AGENT_REASONING] == "Invoice inv_1 is overdue."
 
 
+def test_root_returns_health_info():
+    response = api_handler.lambda_handler(event("GET", "/"), None)
+    assert response["statusCode"] == 200
+    payload = body(response)
+    assert payload["status"] == "ok"
+    assert any("GET /clients" in e for e in payload["endpoints"])
+
+
+def test_named_stage_prefix_is_stripped(db):
+    # A named stage can deliver "/prod/clients" — it must route like "/clients".
+    staged = {
+        "rawPath": "/prod/clients",
+        "requestContext": {"http": {"method": "GET"}, "stage": "prod"},
+        "body": None,
+    }
+    response = api_handler.lambda_handler(staged, None)
+    assert response["statusCode"] == 200
+    assert len(body(response)) == 1
+
+
 def test_approve_executes_and_moves_action_to_activity(db, sends):
     action = dynamo_client.create_pending_action(
         {

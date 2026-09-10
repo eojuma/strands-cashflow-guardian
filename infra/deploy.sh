@@ -35,11 +35,19 @@ echo "Deploying CashflowGuardian to ${REGION} (stack: ${STACK_NAME})"
 # Stage the backend + runtime dependency closure into ../.lambda_build. The
 # script deliberately leaves no requirements.txt so `sam build` only copies.
 "$PYTHON" "$REPO_ROOT/scripts/build_lambda_package.py" "$REPO_ROOT/.lambda_build"
-
 # No --use-container: there is nothing for the Python builder to install.
 sam build \
   --template template.yaml \
   --region "${REGION}"
+
+# sam's Python builder excludes "*.so" from the source it copies (its
+# EXCLUDED_FILES list assumes a container will compile extensions). That silently
+# strips the prebuilt binary extensions we staged (pydantic_core, reportlab,
+# pillow, cryptography, ...), so overlay the staged package back to make the
+# artifact match .lambda_build exactly.
+for fn_dir in .aws-sam/build/*/; do
+  [ -d "$fn_dir" ] && cp -a "$REPO_ROOT/.lambda_build/." "$fn_dir/"
+done
 
 EXTRA_ARGS=("$@")
 
