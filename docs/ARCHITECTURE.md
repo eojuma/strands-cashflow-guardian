@@ -438,6 +438,7 @@ Build these in, don't leave them as "would be nice":
 - **LLM misclassification** — the Scope Sentinel will occasionally get in-scope/out-of-scope wrong. This is exactly why nothing auto-sends: a human catches this at the approval step, and it's worth saying so explicitly in your demo video as a feature, not hiding it as a limitation.
 - **Empty states** — dashboard should render sensibly with zero pending actions ("All caught up") rather than a blank panel; this is a 10-minute fix that meaningfully improves the "complete product experience" impression.
 - **Reasoning is plain text** — `agent_reasoning` templates interpolate user/data-supplied values (milestone names, email subjects, SOW terms), so stray markdown markers (backticks, `**`) can leak in. `schema.sanitize_reasoning()` strips them and collapses whitespace on write (in `create_pending_action`) and again on serialization for the dashboard (`api_handler._enrich_action`), so existing records are cleaned retroactively. `drafted_content` (email bodies / PDF paths) is deliberately left untouched, and single underscores are preserved so invoice ids like `inv_nw_002` survive.
+- **Lambda's filesystem is read-only except `/tmp`** — generated invoice/change-order PDFs must not be written under the task root. `pdf_tool._output_dir()` uses `PDF_OUTPUT_DIR`, defaulting to `/tmp/generated` in Lambda (the SAM template sets it explicitly) and `generated/` locally.
 
 ---
 

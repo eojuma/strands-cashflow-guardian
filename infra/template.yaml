@@ -20,6 +20,8 @@ Globals:
       Variables:
         # "log" for dry-run demos (no real Gmail send); "live" for real sends.
         CASHFLOW_SEND_MODE: !Ref SendMode
+        # Lambda's task root is read-only; generated PDFs must go under /tmp.
+        PDF_OUTPUT_DIR: /tmp/generated
 
 Parameters:
   TableNamePrefix:

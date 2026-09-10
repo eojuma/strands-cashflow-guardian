@@ -7,7 +7,8 @@ generated file; a later day can return an S3 key instead without changing the
 caller.
 
 Output directory: ``PDF_OUTPUT_DIR`` env var, defaulting to ``generated/`` under
-the current working directory (gitignored).
+the current working directory (gitignored). In AWS Lambda the default becomes
+``/tmp/generated`` because the task root (``/var/task``) is read-only.
 """
 
 from __future__ import annotations
@@ -21,10 +22,18 @@ from reportlab.pdfgen import canvas
 from strands import tool
 
 DEFAULT_OUTPUT_DIR = "generated"
+LAMBDA_DEFAULT_OUTPUT_DIR = "/tmp/generated"
 
 
 def _output_dir() -> Path:
-    return Path(os.getenv("PDF_OUTPUT_DIR", DEFAULT_OUTPUT_DIR)).resolve()
+    configured = os.getenv("PDF_OUTPUT_DIR")
+    if configured:
+        return Path(configured).resolve()
+    # Lambda's only writable location is /tmp; a relative "generated" dir would
+    # resolve under the read-only /var/task and fail with EROFS.
+    if os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
+        return Path(LAMBDA_DEFAULT_OUTPUT_DIR)
+    return Path(DEFAULT_OUTPUT_DIR).resolve()
 
 
 def _slug(value: str) -> str:
