@@ -82,6 +82,25 @@ def test_create_action_defaults_to_pending_and_assigns_id(db):
     assert fetched[schema.AGENT_REASONING] == "Milestone complete; no invoice generated yet."
 
 
+def test_create_action_sanitizes_reasoning(db):
+    action = dynamo_client.create_pending_action(
+        _action(
+            agent_reasoning="Invoice `inv_002` is **overdue**; called `check_due_dates`."
+        )
+    )
+    expected = "Invoice inv_002 is overdue; called check_due_dates."
+    assert action[schema.AGENT_REASONING] == expected
+    assert dynamo_client.get_pending_action(action[schema.ACTION_ID])[schema.AGENT_REASONING] == expected
+
+
+def test_create_action_does_not_touch_drafted_content(db):
+    # Email bodies / PDF paths are sent verbatim and must keep any backticks.
+    action = dynamo_client.create_pending_action(
+        _action(drafted_content="Subject: Re: `quick` tweak\n\nBody with `code`.")
+    )
+    assert action[schema.DRAFTED_CONTENT] == "Subject: Re: `quick` tweak\n\nBody with `code`."
+
+
 def test_list_pending_actions_filters_by_status(db):
     first = dynamo_client.create_pending_action(_action())
     dynamo_client.create_pending_action(

@@ -99,6 +99,19 @@ export function runScheduledCheck(): Promise<ScheduledCheckSummary> {
   })
 }
 
+// Mirror of the backend's sanitize_reasoning: strip markdown code/emphasis
+// markers and collapse whitespace before rendering reasoning as plain text.
+// Single underscores are preserved (invoice ids like inv_nw_002).
+export function sanitizeReasoning(text?: string | null): string {
+  if (!text) return ""
+  return text
+    .replace(/`/g, "")
+    .replace(/\*\*/g, "")
+    .replace(/__/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
 // ---------------------------------------------------------------------------
 // Seeded review desk (offline fallback)
 //

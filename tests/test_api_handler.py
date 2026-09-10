@@ -66,6 +66,24 @@ def test_lists_clients_and_pending_actions(db):
     assert len(body(api_handler.lambda_handler(event("GET", "/actions/pending"), None))) == 1
 
 
+def test_pending_action_reasoning_is_sanitized_for_display(db):
+    # Simulate a record written before sanitization existed (bypass the adapter's
+    # write-path sanitizer) and confirm the API still strips stray markdown.
+    dynamo_client._table(schema.PENDING_ACTIONS_TABLE).put_item(
+        Item={
+            schema.ACTION_ID: "legacy_1",
+            schema.CLIENT_ID: "c1",
+            schema.ACTION_TYPE: "dunning_email",
+            schema.DRAFTED_CONTENT: "Reminder",
+            schema.AGENT_REASONING: "Invoice `inv_1` is **overdue**.",
+            schema.ACTION_STATUS: schema.STATUS_PENDING,
+        }
+    )
+    response = api_handler.lambda_handler(event("GET", "/actions/pending"), None)
+    pending = body(response)
+    assert pending[0][schema.AGENT_REASONING] == "Invoice inv_1 is overdue."
+
+
 def test_approve_executes_and_moves_action_to_activity(db, sends):
     action = dynamo_client.create_pending_action(
         {

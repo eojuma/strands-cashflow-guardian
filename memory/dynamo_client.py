@@ -193,6 +193,8 @@ def create_pending_action(action: dict[str, Any]) -> dict[str, Any]:
     ``action_id``/``created_at`` when absent."""
     schema.validate_action(action)
     item = dict(action)
+    if item.get(schema.AGENT_REASONING) is not None:
+        item[schema.AGENT_REASONING] = schema.sanitize_reasoning(item[schema.AGENT_REASONING])
     if not item.get(schema.ACTION_ID):
         item[schema.ACTION_ID] = str(uuid.uuid4())
     item.setdefault(schema.ACTION_STATUS, schema.STATUS_PENDING)

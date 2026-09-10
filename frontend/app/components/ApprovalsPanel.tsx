@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import type { PendingAction } from "@/lib/api"
+import { sanitizeReasoning, type PendingAction } from "@/lib/api"
 
 const TYPE_LABELS: Record<string, string> = {
   invoice: "Invoice",
@@ -147,7 +147,7 @@ export default function ApprovalsPanel({
 
               <p className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900">
                 <span className="font-semibold">Why: </span>
-                {action.agent_reasoning}
+                {sanitizeReasoning(action.agent_reasoning)}
               </p>
 
               {editingId === action.action_id ? (

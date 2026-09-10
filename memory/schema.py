@@ -20,6 +20,7 @@ allowed value is never duplicated (and can never drift) across the codebase.
 from __future__ import annotations
 
 import json
+import re
 from decimal import Decimal
 from typing import Any
 
@@ -127,6 +128,31 @@ def validate_action(action: dict[str, Any]) -> None:
         validate_action_status(action[ACTION_STATUS])
     if action.get(ESCALATION_TIER) is not None:
         validate_escalation_tier(action[ESCALATION_TIER])
+
+
+# Markdown markers that look wrong when reasoning is rendered as plain text.
+_REASONING_STRIP = ("`", "**", "__")
+_WHITESPACE_RE = re.compile(r"\s+")
+
+
+def sanitize_reasoning(text: Any) -> str:
+    """Normalize an ``agent_reasoning`` value for storage and display.
+
+    The reasoning templates interpolate user/data-supplied values (milestone
+    names, email subjects, SOW terms), so strip stray markdown code/emphasis
+    markers and collapse whitespace. This is applied both when an action is
+    written and when it is serialized for the dashboard, so existing records are
+    cleaned retroactively too.
+
+    ``drafted_content`` (email bodies / PDF paths) is intentionally NOT passed
+    through this — only the human-facing explanation.
+    """
+    if not text:
+        return ""
+    cleaned = str(text)
+    for token in _REASONING_STRIP:
+        cleaned = cleaned.replace(token, "")
+    return _WHITESPACE_RE.sub(" ", cleaned).strip()
 
 
 def parse_sow_terms(sow_terms: str) -> dict[str, Any]:

@@ -1,6 +1,6 @@
 "use client"
 
-import type { PendingAction } from "@/lib/api"
+import { sanitizeReasoning, type PendingAction } from "@/lib/api"
 
 const STATUS_STYLES: Record<string, string> = {
   approved: "bg-emerald-50 text-emerald-700 ring-emerald-200",
@@ -39,7 +39,7 @@ export default function ActivityLog({ entries }: { entries: PendingAction[] }) {
                   </span>
                 </p>
                 <p className="mt-0.5 truncate text-xs text-slate-500">
-                  {entry.agent_reasoning}
+                  {sanitizeReasoning(entry.agent_reasoning)}
                 </p>
               </div>
               {entry.resolved_at && (

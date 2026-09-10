@@ -434,6 +434,7 @@ Build these in, don't leave them as "would be nice":
 - **Duplicate escalation prevention** — the `tone_log` check in §8.2 step 2 is not optional. Without it, a bug could send the same overdue notice repeatedly on every 15-minute Orchestrator run. That is why an approved send *also* appends to `tone_log` (§8.2 step 7): the next pass sees the tier already logged and proposes nothing until the next threshold.
 - **LLM misclassification** — the Scope Sentinel will occasionally get in-scope/out-of-scope wrong. This is exactly why nothing auto-sends: a human catches this at the approval step, and it's worth saying so explicitly in your demo video as a feature, not hiding it as a limitation.
 - **Empty states** — dashboard should render sensibly with zero pending actions ("All caught up") rather than a blank panel; this is a 10-minute fix that meaningfully improves the "complete product experience" impression.
+- **Reasoning is plain text** — `agent_reasoning` templates interpolate user/data-supplied values (milestone names, email subjects, SOW terms), so stray markdown markers (backticks, `**`) can leak in. `schema.sanitize_reasoning()` strips them and collapses whitespace on write (in `create_pending_action`) and again on serialization for the dashboard (`api_handler._enrich_action`), so existing records are cleaned retroactively. `drafted_content` (email bodies / PDF paths) is deliberately left untouched, and single underscores are preserved so invoice ids like `inv_nw_002` survive.
 
 ---
 

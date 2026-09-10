@@ -130,6 +130,12 @@ def _activity_log() -> dict[str, Any]:
 def _enrich_action(action: dict) -> dict[str, Any]:
     """Attach the client name (for display) to an action record."""
     enriched = dict(action)
+    if enriched.get(schema.AGENT_REASONING) is not None:
+        # Clean legacy/raw records on the way out so the dashboard never shows
+        # stray markdown, even for actions written before sanitization existed.
+        enriched[schema.AGENT_REASONING] = schema.sanitize_reasoning(
+            enriched[schema.AGENT_REASONING]
+        )
     client = dynamo_client.get_client(action.get(schema.CLIENT_ID, ""))
     enriched["client_name"] = (client or {}).get(schema.NAME, "")
     return _serialize(enriched)
