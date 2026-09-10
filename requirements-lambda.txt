@@ -1,23 +1,24 @@
-# Runtime-only dependencies for the deployed Lambdas.
+# Runtime-only dependencies for the deployed Lambdas, pinned for reproducibility.
 #
-# `infra/deploy.sh` stages this file as `.lambda_build/requirements.txt`, which
-# is what `sam build` installs into the function artifact. Keep it to what the
-# handlers import at runtime; the dev/test-only packages in `requirements.txt`
-# (pytest, moto, pypdf) are intentionally excluded to keep the package small.
+# `infra/deploy.sh` runs `scripts/build_lambda_package.py`, which resolves this
+# closure from the project `.venv` and copies it into `.lambda_build`; `sam
+# build` then only copies (no pip install, no network). Dev/test-only packages
+# (pytest, moto, pypdf) live in `requirements.txt` and are intentionally
+# excluded here.
 
-# Strands Agents SDK — multi-agent framework
-strands-agents>=1.53.0,<2.0.0
+strands-agents==1.53.0
+boto3==1.43.83
+botocore==1.43.91
+python-dotenv==1.2.3
+reportlab==4.5.1
+google-api-python-client==2.199.0
+google-auth-oauthlib==1.4.0
+google-auth==2.56.3
 
-# AWS SDK — DynamoDB + Bedrock (boto3 default credential chain)
-boto3>=1.43.0,<2.0.0
-
-# Loads the local .env in dev (harmless in Lambda; orchestrator imports it)
-python-dotenv>=1.0.0,<2.0.0
-
-# Document generation — invoice / change-order PDFs (pdf_tool)
-reportlab>=4.0.0,<5.0.0
-
-# Gmail API (gmail_tool)
-google-api-python-client>=2.0.0,<3.0.0
-google-auth-oauthlib>=1.0.0,<2.0.0
-google-auth>=2.0.0,<3.0.0
+# Transitive pins, kept for a fully reproducible runtime set.
+httpx==0.28.1
+httpx-sse==0.4.3
+Jinja2==3.1.6
+pydantic==2.13.4
+pydantic-settings==2.15.0
+pydantic_core==2.46.4
