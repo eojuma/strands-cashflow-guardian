@@ -5,6 +5,8 @@ __pycache__/
 .venv/
 venv/
 generated/
+.lambda_build/
+.aws-sam/
 
 # Env / secrets
 .env

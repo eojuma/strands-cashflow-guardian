@@ -8,41 +8,18 @@ Description: >
 
 Globals:
   Function:
-    Runtime: python3.11
+    Runtime: python3.12
     Timeout: 60
     MemorySize: 256
-    CodeUri: ..
+    # Staged offline by scripts/build_lambda_package.py: only agents/, memory/,
+    # lambda_handlers/ plus the runtime dependency closure copied from the
+    # project virtualenv. Keeps frontend/node_modules, the venvs, and the
+    # dev/test-only packages out of the deployment package.
+    CodeUri: ../.lambda_build
     Environment:
       Variables:
-        # "log" for dry-run demos (no real Gmail send); omit for real sends.
+        # "log" for dry-run demos (no real Gmail send); "live" for real sends.
         CASHFLOW_SEND_MODE: !Ref SendMode
-    # Scoped role (no dynamodb:* / bedrock:* wildcards) — see iam-policies/.
-    Policies:
-      - Version: "2012-10-17"
-        Statement:
-          - Sid: DynamoDBMemoryAccess
-            Effect: Allow
-            Action:
-              - dynamodb:GetItem
-              - dynamodb:PutItem
-              - dynamodb:UpdateItem
-              - dynamodb:Query
-              - dynamodb:Scan
-            Resource:
-              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/CashflowGuardian-Clients"
-              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/CashflowGuardian-PendingActions"
-              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/CashflowGuardian-PendingActions/index/ClientIdIndex"
-          - Sid: BedrockInvokeModel
-            Effect: Allow
-            Action: bedrock:InvokeModel
-            Resource: !Sub "arn:aws:bedrock:${AWS::Region}::foundation-model/anthropic.claude-3-5-sonnet-20241022-v2:0"
-          - Sid: CloudWatchLogs
-            Effect: Allow
-            Action:
-              - logs:CreateLogGroup
-              - logs:CreateLogStream
-              - logs:PutLogEvents
-            Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*"
 
 Parameters:
   TableNamePrefix:
@@ -100,6 +77,33 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Handler: lambda_handlers.orchestrator_handler.lambda_handler
+      # Scoped role (no dynamodb:* / bedrock:* wildcards) — see iam-policies/.
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            - Sid: DynamoDBMemoryAccess
+              Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+                - dynamodb:UpdateItem
+                - dynamodb:Query
+                - dynamodb:Scan
+              Resource:
+                - !GetAtt ClientsTable.Arn
+                - !GetAtt PendingActionsTable.Arn
+                - !Sub "${PendingActionsTable.Arn}/index/*"
+            - Sid: BedrockInvokeModel
+              Effect: Allow
+              Action: bedrock:InvokeModel
+              Resource: !Sub "arn:aws:bedrock:${AWS::Region}::foundation-model/anthropic.claude-3-5-sonnet-20241022-v2:0"
+            - Sid: CloudWatchLogs
+              Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*"
       Events:
         ScheduledCheck:
           Type: Schedule
@@ -119,6 +123,30 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Handler: lambda_handlers.api_handler.lambda_handler
+      # The REST handler is deterministic: DynamoDB + logs only. It never calls
+      # Bedrock, so it is not granted Bedrock access.
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            - Sid: DynamoDBMemoryAccess
+              Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+                - dynamodb:UpdateItem
+                - dynamodb:Query
+                - dynamodb:Scan
+              Resource:
+                - !GetAtt ClientsTable.Arn
+                - !GetAtt PendingActionsTable.Arn
+                - !Sub "${PendingActionsTable.Arn}/index/*"
+            - Sid: CloudWatchLogs
+              Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*"
       Events:
         ProxyApi:
           Type: HttpApi

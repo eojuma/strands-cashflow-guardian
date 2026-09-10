@@ -55,6 +55,7 @@ strands-cashflow-guardian/
 ├── README.md
 ├── LICENSE
 ├── requirements.txt
+├── requirements-lambda.txt          # Runtime-only deps installed into the Lambda package
 ├── .env.example
 ├── .gitignore
 │
@@ -92,7 +93,7 @@ strands-cashflow-guardian/
 │
 ├── frontend/
 │   ├── package.json
-│   ├── next.config.ts
+│   ├── next.config.js
 │   ├── app/
 │   │   ├── layout.tsx
 │   │   ├── page.tsx                 # Composes the three dashboard panels
@@ -104,7 +105,9 @@ strands-cashflow-guardian/
 │       └── api.ts                   # Fetch wrappers calling backend endpoints (see §9)
 │
 ├── scripts/
-│   └── seed_demo_data.py            # Populates DynamoDB with 3-5 synthetic clients
+│   ├── seed_demo_data.py            # Populates DynamoDB with 3-5 synthetic clients
+│   ├── serve_api.py                 # Runs api_handler as a local HTTP server
+│   └── build_lambda_package.py      # Stages the offline Lambda package (no pip/Docker)
 │
 ├── tests/
 │   ├── test_orchestrator.py

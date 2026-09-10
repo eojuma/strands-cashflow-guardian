@@ -1,28 +1,42 @@
 #!/usr/bin/env bash
 #
-# One-command deploy wrapper around `sam deploy`.
+# One-command deploy wrapper around `sam build` + `sam deploy`.
 #
 # Prereqs (see README "Getting Started"):
 #   - AWS CLI + SAM CLI installed (user-local install is fine)
-#   - AWS credentials configured for the target account/region
+#   - AWS credentials configured for the target account/region (uses ~/.aws)
 #   - Bedrock model access enabled for anthropic.claude-3-5-sonnet-*
 #
-# Usage:
-#   ./deploy.sh                 # guided first deploy (asks for stack name etc.)
-#   ./deploy.sh --no-confirm    # re-deploy with saved settings (samconfig.toml)
+# Packaging is OFFLINE: scripts/build_lambda_package.py copies the runtime
+# dependency closure from the project virtualenv into ../.lambda_build, so no
+# container build and no PyPI access are required.
 #
-# The default SEND_MODE is "log" (no real email) for safe demos. To enable real
-# Gmail sends after a human approves, pass:
-#   ./deploy.sh --parameter-overrides SendMode=live
+# Usage:
+#   ./deploy.sh                     # package + deploy
+#   SEND_MODE=live ./deploy.sh      # enable real Gmail sends on approval
+#   STACK_NAME=my-stack ./deploy.sh # override the stack name
+#
+# The default SEND_MODE is "log" (no real email) for safe demos.
 set -euo pipefail
 
 cd "$(dirname "$0")"
 
 STACK_NAME="${STACK_NAME:-cashflow-guardian}"
 REGION="${AWS_REGION:-$(aws configure get region 2>/dev/null || echo us-east-1)}"
+REPO_ROOT="$(cd .. && pwd)"
+
+# Use the project virtualenv's Python (it has the runtime deps + `packaging`);
+# fall back to python3 if .venv is missing.
+PYTHON="${PYTHON:-$REPO_ROOT/.venv/bin/python}"
+[ -x "$PYTHON" ] || PYTHON="python3"
 
 echo "Deploying CashflowGuardian to ${REGION} (stack: ${STACK_NAME})"
 
+# Stage the backend + runtime dependency closure into ../.lambda_build. The
+# script deliberately leaves no requirements.txt so `sam build` only copies.
+"$PYTHON" "$REPO_ROOT/scripts/build_lambda_package.py" "$REPO_ROOT/.lambda_build"
+
+# No --use-container: there is nothing for the Python builder to install.
 sam build \
   --template template.yaml \
   --region "${REGION}"
@@ -35,7 +49,7 @@ sam deploy \
   --capabilities CAPABILITY_IAM \
   --resolve-s3 \
   --parameter-overrides "SendMode=${SEND_MODE:-log}" \
-  "${EXTRA_ARGS[@]}"
+  ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}
 
 echo
 echo "Deploy complete. Endpoints:"

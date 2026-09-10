@@ -24,6 +24,16 @@ def _load_template() -> dict:
     )
 
 
+def _policy_actions(function: dict) -> list[str]:
+    """Flatten the Action entries from a function's inline Policies."""
+    actions: list[str] = []
+    for policy in function["Properties"]["Policies"]:
+        for statement in policy["Statement"]:
+            action = statement["Action"]
+            actions.extend(action if isinstance(action, list) else [action])
+    return actions
+
+
 def test_sam_template_defines_api_schedule_and_scoped_permissions():
     resources = _load_template()["Resources"]
 
@@ -48,20 +58,25 @@ def test_sam_template_defines_api_schedule_and_scoped_permissions():
 
 def test_sam_template_uses_scoped_iam_and_send_mode_parameter():
     template = _load_template()
+    resources = template["Resources"]
     params = template["Parameters"]
 
-    # Least-privilege role: no wildcard dynamodb:* / bedrock:* grants anywhere in
-    # the IAM statements (a comment in the file may still mention the phrase).
-    statements = template["Globals"]["Function"]["Policies"][0]["Statement"]
-    actions = [
-        action
-        for stmt in statements
-        for action in (stmt["Action"] if isinstance(stmt["Action"], list) else [stmt["Action"]])
-    ]
-    assert "dynamodb:*" not in actions
-    assert "bedrock:*" not in actions
-    assert "bedrock:InvokeModel" in actions
-    assert "dynamodb:Scan" in actions
+    # Regression guard: SAM's Globals.Function does not support `Policies`
+    # (putting it there fails `sam build` with InvalidGlobalsSectionException).
+    assert "Policies" not in template["Globals"]["Function"]
+
+    orchestrator_actions = _policy_actions(resources["OrchestratorFunction"])
+    api_actions = _policy_actions(resources["ApiFunction"])
+
+    # Least-privilege: no wildcard grants, and the deterministic REST handler is
+    # not given Bedrock access (only the Orchestrator invokes the model).
+    for actions in (orchestrator_actions, api_actions):
+        assert "dynamodb:*" not in actions
+        assert "bedrock:*" not in actions
+        assert "dynamodb:Scan" in actions
+        assert "logs:PutLogEvents" in actions
+    assert "bedrock:InvokeModel" in orchestrator_actions
+    assert "bedrock:InvokeModel" not in api_actions
 
     # SendMode drives CASHFLOW_SEND_MODE (log = dry-run demos, live = real Gmail).
     assert params["SendMode"]["Default"] == "log"
@@ -71,3 +86,15 @@ def test_sam_template_uses_scoped_iam_and_send_mode_parameter():
     outputs = template["Outputs"]
     assert set(outputs) == {"ClientsTableName", "PendingActionsTableName", "ApiEndpoint"}
     assert "/prod" in outputs["ApiEndpoint"]["Value"]
+
+
+def test_sam_template_builds_from_the_staged_backend_only():
+    """CodeUri must point at the staged backend, never the repo root.
+
+    With `CodeUri: ..` sam build packages frontend/node_modules and the venvs
+    (the repo is >1 GB), which exceeds Lambda's package limit.
+    """
+    template = _load_template()
+    assert template["Globals"]["Function"]["CodeUri"] == "../.lambda_build"
+    # Runtime must match the interpreter the package is staged from (.venv).
+    assert template["Globals"]["Function"]["Runtime"] == "python3.12"

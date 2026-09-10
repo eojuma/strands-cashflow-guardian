@@ -211,6 +211,11 @@ host it on Vercel or Amplify and point `NEXT_PUBLIC_API_BASE_URL` at the printed
 API endpoint. Deploy uses your `~/.aws` identity (or `AWS_PROFILE`), not `.env`;
 optional overrides are `STACK_NAME` and `SEND_MODE` (default `log`).
 
+Packaging is **offline**: `scripts/build_lambda_package.py` copies the runtime
+dependency closure from your project `.venv` (pruning the unused Gmail discovery
+docs) into `.lambda_build`, so `deploy.sh` needs no Docker and no PyPI access.
+Just make sure the deps are installed first (`pip install -r requirements.txt`).
+
 ### 5. Frontend against the deployed API (Mode C)
 
 > Running locally instead? Use Mode A (UI preview) or Mode B (full local

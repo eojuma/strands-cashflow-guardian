@@ -1,0 +1,23 @@
+# Runtime-only dependencies for the deployed Lambdas.
+#
+# `infra/deploy.sh` stages this file as `.lambda_build/requirements.txt`, which
+# is what `sam build` installs into the function artifact. Keep it to what the
+# handlers import at runtime; the dev/test-only packages in `requirements.txt`
+# (pytest, moto, pypdf) are intentionally excluded to keep the package small.
+
+# Strands Agents SDK — multi-agent framework
+strands-agents>=1.53.0,<2.0.0
+
+# AWS SDK — DynamoDB + Bedrock (boto3 default credential chain)
+boto3>=1.43.0,<2.0.0
+
+# Loads the local .env in dev (harmless in Lambda; orchestrator imports it)
+python-dotenv>=1.0.0,<2.0.0
+
+# Document generation — invoice / change-order PDFs (pdf_tool)
+reportlab>=4.0.0,<5.0.0
+
+# Gmail API (gmail_tool)
+google-api-python-client>=2.0.0,<3.0.0
+google-auth-oauthlib>=1.0.0,<2.0.0
+google-auth>=2.0.0,<3.0.0
