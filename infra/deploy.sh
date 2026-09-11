@@ -45,7 +45,13 @@ if [ -z "$SAM_BIN" ]; then
   exit 1
 fi
 
-echo "Deploying CashflowGuardian to ${REGION} (stack: ${STACK_NAME})"
+# Resolve the send mode: shell $SEND_MODE -> .env CASHFLOW_SEND_MODE -> log.
+# This way a plain `./deploy.sh` respects the mode configured in .env instead of
+# silently falling back to log.
+ENV_SEND_MODE="$(grep -E '^CASHFLOW_SEND_MODE=' "$REPO_ROOT/.env" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d '[:space:]"' | tr -d "'")"
+SEND_MODE_RESOLVED="${SEND_MODE:-${ENV_SEND_MODE:-log}}"
+
+echo "Deploying CashflowGuardian to ${REGION} (stack: ${STACK_NAME}, send mode: ${SEND_MODE_RESOLVED})"
 
 # Stage the backend + runtime dependency closure into ../.lambda_build. The
 # script deliberately leaves no requirements.txt so `sam build` only copies.
@@ -71,7 +77,7 @@ EXTRA_ARGS=("$@")
   --region "${REGION}" \
   --capabilities CAPABILITY_IAM \
   --resolve-s3 \
-  --parameter-overrides "SendMode=${SEND_MODE:-log}" \
+  --parameter-overrides "SendMode=${SEND_MODE_RESOLVED}" \
   ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}
 
 echo
