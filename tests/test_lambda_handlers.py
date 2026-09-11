@@ -81,6 +81,52 @@ def test_run_scheduled_check_persists_dunning_proposal(db, monkeypatch):
     assert pending[0][schema.ACTION_TYPE] == "dunning_email"
 
 
+def test_scheduled_check_does_not_duplicate_pending_actions(db):
+    from lambda_handlers import orchestrator_handler
+
+    dynamo_client.put_client(_late_payer_client())
+
+    first = orchestrator_handler.run_scheduled_check(today="2026-08-20T00:00:00+00:00")
+    second = orchestrator_handler.run_scheduled_check(today="2026-08-20T00:00:00+00:00")
+
+    assert first["by_type"] == {"dunning_email": 1}
+    assert second["by_type"] == {}  # already pending -> skipped
+    assert len(dynamo_client.get_pending_actions(status=schema.STATUS_PENDING)) == 1
+
+
+def test_rejected_action_does_not_block_a_new_proposal(db):
+    from lambda_handlers import api_handler, orchestrator_handler
+
+    dynamo_client.put_client(_late_payer_client())
+    orchestrator_handler.run_scheduled_check(today="2026-08-20T00:00:00+00:00")
+    pending = dynamo_client.get_pending_actions(status=schema.STATUS_PENDING)
+    api_handler.route(
+        "POST", f"/actions/{pending[0][schema.ACTION_ID]}/resolve", {"decision": "rejected"}
+    )
+
+    summary = orchestrator_handler.run_scheduled_check(today="2026-08-20T00:00:00+00:00")
+
+    assert summary["by_type"] == {"dunning_email": 1}  # rejected row didn't block
+    assert len(dynamo_client.get_pending_actions(status=schema.STATUS_PENDING)) == 1
+
+
+def test_scheduled_check_never_sends_email(db, monkeypatch):
+    """The scheduled path only proposes; nothing is emailed without approval."""
+    from lambda_handlers import orchestrator_handler
+    from agents import orchestrator
+
+    calls: list[int] = []
+    monkeypatch.setattr(
+        orchestrator, "_gmail_send_email", lambda *a, **k: calls.append(1) or True
+    )
+    monkeypatch.setenv("CASHFLOW_SEND_MODE", "live")
+    dynamo_client.put_client(_late_payer_client())
+
+    orchestrator_handler.run_scheduled_check(today="2026-08-20T00:00:00+00:00")
+
+    assert calls == []
+
+
 def test_scheduled_check_proposes_invoice_once_for_completed_milestone(db, monkeypatch, tmp_path):
     from lambda_handlers import orchestrator_handler
 

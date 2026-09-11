@@ -41,6 +41,9 @@ Two responsibilities:
    anything is sent, and the day_14 warning is never sent without approval.
 
 Do not invent payment history and do not send anything externally yourself.
+
+When drafting any client-facing email body, do not include file paths. Reference
+the invoice by its amount and due date only.
 """
 
 # Escalation thresholds: days past due at which each tier applies.
