@@ -121,9 +121,53 @@ def _default_send_email(to: str, subject: str, body: str) -> bool:
     return _gmail_send_email(to, subject, body)
 
 
+def _pending_reference(action: dict) -> str:
+    """Stable reference used to detect duplicate proposals for one client."""
+    return str(
+        action.get("invoice_id")
+        or action.get("milestone_id")
+        or action.get(schema.DRAFTED_CONTENT)
+        or ""
+    )
+
+
+def _has_pending_duplicate(action: dict) -> bool:
+    """True when an equivalent action is already ``pending`` for this client.
+
+    Dedupes on ``(client_id, action_type, reference)`` where the reference is
+    the invoice id, milestone id, or drafted content. Only ``pending`` rows
+    count, so a rejected/executed action never blocks a fresh proposal.
+    """
+    client_id = action.get(schema.CLIENT_ID)
+    reference = _pending_reference(action)
+    if not client_id or not reference:
+        return False
+    existing = dynamo_client.get_pending_actions(
+        status=schema.STATUS_PENDING, client_id=client_id
+    )
+    for item in existing:
+        if item.get(schema.ACTION_TYPE) != action.get(schema.ACTION_TYPE):
+            continue
+        if _pending_reference(item) == reference:
+            return True
+    return False
+
+
 def persist_proposed_actions(proposed_actions: list[dict]) -> list[dict]:
-    """Persist proposed actions as ``pending`` (nothing is executed here)."""
-    return [dynamo_client.create_pending_action(a) for a in proposed_actions]
+    """Persist proposed actions as ``pending`` (nothing is executed here).
+
+    Idempotent per ``(client_id, action_type, reference)``: a proposal is skipped
+    when an equivalent action is already pending, so repeated scheduled runs do
+    not grow the approvals queue. Rejected/executed actions do not block a new
+    proposal. Nothing is ever sent on this path — only a human approval reaches
+    :func:`execute_action`.
+    """
+    persisted: list[dict] = []
+    for action in proposed_actions:
+        if _has_pending_duplicate(action):
+            continue
+        persisted.append(dynamo_client.create_pending_action(action))
+    return persisted
 
 
 def execute_action(action_id: str, send_fn=None) -> bool:

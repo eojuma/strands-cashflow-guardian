@@ -237,3 +237,39 @@ def test_executing_approved_dunning_records_to_tone_log(db):
     # invoice here is 7 days past due (day_7 applicable) yet already logged.
     overdue = {"status": "unpaid", "invoice_id": "inv_002", "due_date": "2026-08-18"}
     assert invoice_dunning.determine_next_tier(overdue, tone_log, "2026-08-25") is None
+
+
+def test_persist_proposed_actions_is_idempotent_per_reference(db):
+    _seed_client()
+    proposed = [
+        {
+            schema.CLIENT_ID: "client_001",
+            schema.ACTION_TYPE: "dunning_email",
+            schema.ESCALATION_TIER: "day_7",
+            "invoice_id": "inv_002",
+            schema.DRAFTED_CONTENT: "Overdue notice",
+            schema.AGENT_REASONING: "Invoice overdue.",
+        }
+    ]
+
+    first = orchestrator.persist_proposed_actions(proposed)
+    second = orchestrator.persist_proposed_actions(proposed)
+
+    assert len(first) == 1
+    assert second == []  # same (client, type, invoice) already pending -> skipped
+    assert len(dynamo_client.get_pending_actions(status=schema.STATUS_PENDING)) == 1
+
+
+def test_persist_proposed_actions_allows_different_reference(db):
+    _seed_client()
+    base = {
+        schema.CLIENT_ID: "client_001",
+        schema.ACTION_TYPE: "dunning_email",
+        schema.ESCALATION_TIER: "day_3",
+        schema.DRAFTED_CONTENT: "Reminder",
+        schema.AGENT_REASONING: "Invoice overdue.",
+    }
+    orchestrator.persist_proposed_actions([{**base, "invoice_id": "inv_002"}])
+    # A different invoice is a different reference -> both may be pending.
+    orchestrator.persist_proposed_actions([{**base, "invoice_id": "inv_003"}])
+    assert len(dynamo_client.get_pending_actions(status=schema.STATUS_PENDING)) == 2
