@@ -22,6 +22,10 @@ Globals:
         CASHFLOW_SEND_MODE: !Ref SendMode
         # Lambda's task root is read-only; generated PDFs must go under /tmp.
         PDF_OUTPUT_DIR: /tmp/generated
+        # Gmail OAuth paths (present only when credentials/ was bundled by
+        # build_lambda_package.py; otherwise live mode logs instead of sending).
+        GMAIL_CLIENT_SECRET_FILE: /var/task/credentials/client_secret.json
+        GMAIL_TOKEN_FILE: /var/task/credentials/token.json
 
 Parameters:
   TableNamePrefix:

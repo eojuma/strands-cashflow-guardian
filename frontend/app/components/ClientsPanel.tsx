@@ -92,7 +92,7 @@ export default function ClientsPanel({
             </div>
             {open === client.client_id && (
               <div className="mt-2 rounded-md border border-slate-200 bg-slate-50 p-3">
-                <div className="flex gap-2">
+                <div className="flex flex-col gap-2 sm:flex-row">
                   <input
                     value={name}
                     onChange={(e) => setName(e.target.value)}
@@ -106,7 +106,7 @@ export default function ClientsPanel({
                     type="number"
                     min="0"
                     step="0.01"
-                    className="w-28 rounded-md border border-slate-300 px-2 py-1 text-sm"
+                    className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm sm:w-28"
                   />
                 </div>
                 {error && <p className="mt-2 text-xs text-red-600">{error}</p>}

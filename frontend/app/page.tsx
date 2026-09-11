@@ -138,10 +138,10 @@ export default function Dashboard() {
   }
 
   return (
-    <main className="mx-auto max-w-7xl px-6 py-8">
-      <header className="mb-8 flex items-end justify-between">
+    <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
+      <header className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">
+          <h1 className="text-xl font-bold tracking-tight sm:text-2xl">
             CashflowGuardian Command Center
           </h1>
           <p className="mt-1 text-sm text-slate-500">
@@ -149,19 +149,19 @@ export default function Dashboard() {
             proposal.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <button
             onClick={handleScopeScan}
             disabled={scanning || checking}
             title="Run the Scope Creep Sentinel against a synthetic inbound email (no Gmail needed)"
-            className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full rounded-md bg-violet-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
           >
-            {scanning ? "Scanning…" : "Run scope scan (demo)"}
+            {scanning ? "Scanning…" : "Run scope scan"}
           </button>
           <button
             onClick={handleRunCheck}
             disabled={checking || scanning}
-            className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
           >
             {checking ? "Checking…" : "Run scheduled check"}
           </button>

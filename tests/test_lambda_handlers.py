@@ -116,10 +116,40 @@ def test_run_scheduled_check_skips_scope_scan_without_gmail(db):
     assert summary["skipped_scope_scan"] is True
 
 
-def test_run_scheduled_check_reports_scope_proposals(db, monkeypatch):
+def test_gmail_configured_requires_a_token(monkeypatch):
     from lambda_handlers import orchestrator_handler
 
-    monkeypatch.setenv("GMAIL_TOKEN_FILE", "/tmp/token.json")
+    # A client secret alone is not enough (the consent flow cannot run in Lambda).
+    monkeypatch.setenv("GMAIL_TOKEN_FILE", "/nonexistent/token.json")
+    assert orchestrator_handler._gmail_configured() is False
+
+
+def test_send_fn_logs_when_live_without_token(monkeypatch):
+    from lambda_handlers import api_handler
+
+    monkeypatch.setenv("CASHFLOW_SEND_MODE", "live")
+    monkeypatch.setenv("GMAIL_TOKEN_FILE", "/nonexistent/token.json")
+    fn = api_handler._send_fn()
+    assert fn.__name__ == "_log_send"  # never crashes an approval
+    assert fn("client@example.com", "subject", "body") is True
+
+
+def test_send_fn_uses_gmail_when_token_present(monkeypatch, tmp_path):
+    from lambda_handlers import api_handler
+
+    token = tmp_path / "token.json"
+    token.write_text("{}")
+    monkeypatch.setenv("CASHFLOW_SEND_MODE", "live")
+    monkeypatch.setenv("GMAIL_TOKEN_FILE", str(token))
+    assert api_handler._send_fn() is api_handler._gmail_send_email
+
+
+def test_run_scheduled_check_reports_scope_proposals(db, monkeypatch, tmp_path):
+    from lambda_handlers import orchestrator_handler
+
+    token = tmp_path / "token.json"
+    token.write_text("{}")
+    monkeypatch.setenv("GMAIL_TOKEN_FILE", str(token))
     dynamo_client.put_client(_client())
 
     emails = [

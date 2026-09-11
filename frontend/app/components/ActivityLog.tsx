@@ -22,7 +22,7 @@ export default function ActivityLog({ entries }: { entries: PendingAction[] }) {
       ) : (
         <ul className="divide-y divide-slate-100">
           {entries.map((entry) => (
-            <li key={entry.action_id} className="flex items-start gap-4 py-3">
+            <li key={entry.action_id} className="flex flex-wrap items-start gap-3 py-3">
               <span
                 className={`mt-0.5 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${
                   STATUS_STYLES[entry.status] ?? "bg-slate-100 text-slate-600 ring-slate-200"

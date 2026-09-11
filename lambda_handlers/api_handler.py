@@ -47,19 +47,32 @@ def _err(message: str, status: int = 400) -> dict[str, Any]:
     return _ok({"error": message}, status)
 
 
+def _log_send(to: str, subject: str, body: str) -> bool:
+    logger.info("[dry-run send] to=%s subject=%s body=%s", to, subject, body)
+    return True
+
+
 def _send_fn():
     """Default email executor for approvals.
 
-    Honors ``CASHFLOW_SEND_MODE=log`` (used for demos/dry runs without Gmail
-    credentials): instead of sending, logs the message and returns True.
+    ``CASHFLOW_SEND_MODE=log`` always logs (safe for demos/dry runs). ``live``
+    uses Gmail **only when a stored OAuth token exists**; otherwise it logs and
+    warns, so a misconfigured deployment can never crash an approval (the
+    interactive consent flow cannot run in Lambda).
     """
     if os.getenv("CASHFLOW_SEND_MODE", "").lower() == "log":
-        def log_send(to: str, subject: str, body: str) -> bool:
-            logger.info("[dry-run send] to=%s subject=%s body=%s", to, subject, body)
-            return True
+        return _log_send
 
-        return log_send
-    return _gmail_send_email
+    from agents.tools.gmail_tool import gmail_available
+
+    if gmail_available():
+        return _gmail_send_email
+
+    logger.warning(
+        "CASHFLOW_SEND_MODE=live but no Gmail OAuth token is available; "
+        "logging the send instead of emailing."
+    )
+    return _log_send
 
 
 def _serialize(value: Any) -> Any:
