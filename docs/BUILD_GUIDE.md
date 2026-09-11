@@ -59,7 +59,7 @@ It must show, at minimum:
 
 ## 5. Build Phases
 
-Four GitHub milestones map one-to-one onto the four phases in `create_issues.sh`:
+Four GitHub milestones map one-to-one onto the four build phases:
 
 - **Phase 1: Foundation (Days 1-5) — implemented.** Bedrock/Strands setup, DynamoDB schema, orchestrator skeleton, PDF tool, Gmail tool.
 - **Phase 2: Core Agent Logic (Days 6-13) — implemented and tested.** Escalation ladder, guardrails, Scope Sentinel, and human-in-the-loop state machine.

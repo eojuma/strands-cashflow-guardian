@@ -338,7 +338,6 @@ Licensed under the MIT License. See [`LICENSE`](./LICENSE) for details.
 - **Track:** Professional Agents
 - **Event:** AWS "Agents for Humans" Hackathon
 - **Live demo:** [strands-cashflow-guardian.vercel.app](https://strands-cashflow-guardian.vercel.app)
-- Devpost writeup: [`docs/DEVPOST.md`](./docs/DEVPOST.md)
 - Architecture diagram: [`demo/architecture-diagram.png`](./demo/architecture-diagram.png) (source: [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md))
 - Demo narration/shot list: [`demo/video_script.md`](./demo/video_script.md)
 - Demo video: _link added at submission_
