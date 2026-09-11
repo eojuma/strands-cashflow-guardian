@@ -99,6 +99,14 @@ export function runScheduledCheck(): Promise<ScheduledCheckSummary> {
   })
 }
 
+// Demo path: run only the Scope Creep Sentinel (no Gmail needed).
+export function runScopeScan(): Promise<ScheduledCheckSummary> {
+  return request<ScheduledCheckSummary>("/run-scope-scan", {
+    method: "POST",
+    body: JSON.stringify({}),
+  })
+}
+
 // Mirror of the backend's sanitize_reasoning: strip markdown code/emphasis
 // markers and collapse whitespace before rendering reasoning as plain text.
 // Single underscores are preserved (invoice ids like inv_nw_002).

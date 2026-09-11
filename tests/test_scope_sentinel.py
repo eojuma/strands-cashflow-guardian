@@ -107,3 +107,27 @@ def test_scope_sentinel_agent_registers_tools():
     agent = scope_sentinel.build_scope_sentinel_agent(MODEL_ID)
     assert "read_recent_emails" in agent.tool_names
     assert "generate_change_order_pdf" in agent.tool_names
+
+
+def test_demo_scope_email_uses_sow_and_trips_the_sentinel(tmp_path, monkeypatch):
+    monkeypatch.setenv("PDF_OUTPUT_DIR", str(tmp_path))
+    client = _client()
+
+    email = scope_sentinel.demo_scope_email(client, today="2026-08-20T09:00:00Z")
+
+    assert email["sender"] == client["email"]
+    assert "Dark mode toggle" in email["body"]
+    # Feeding it straight into the core produces a change order (no Gmail).
+    actions = scope_sentinel.check_inbox([email], client)
+    assert len(actions) == 1
+    assert actions[0][schema.ACTION_TYPE] == "change_order"
+
+
+def test_demo_scope_email_falls_back_when_no_examples():
+    client = _client()
+    client["sow_terms"] = json.dumps({"deliverables": ["Landing page"]})
+
+    email = scope_sentinel.demo_scope_email(client)
+
+    assert email is not None
+    assert email["body"]  # still a plausible request that the core will flag

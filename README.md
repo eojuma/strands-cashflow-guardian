@@ -4,7 +4,7 @@
 
 Built for the [AWS "Agents for Humans" Hackathon](https://agentsforhumans.devpost.com/) — Professional Agents Track.
 
-> Freelancers lose income two ways: unbilled scope creep, and invoices that sit unpaid — over 50% of B2B invoices are paid past 30 days. CashflowGuardian catches both, autonomously, and only asks a human to weigh in when a real decision needs making.
+> Freelancers lose income two ways: unbilled scope creep, and invoices that sit unpaid — 55% of U.S. B2B invoiced sales are past due.[^1] CashflowGuardian catches both, autonomously, and only asks a human to weigh in when a real decision needs making.
 
 ---
 
@@ -25,6 +25,8 @@ Full system design: see [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md). Hackat
 
 A freelancer's real accountant would notice a request creeping outside scope, and would know exactly how firmly to word a payment reminder on day 14 versus day 3. CashflowGuardian is built to make that same judgment call, consistently, without the freelancer having to be the one to bring it up.
 
+The average U.S. small business is owed roughly $17,500 in unpaid invoices at any given time.[^2]
+
 ---
 
 ## Tech Stack
@@ -32,7 +34,7 @@ A freelancer's real accountant would notice a request creeping outside scope, an
 | Layer | Technology |
 |---|---|
 | Agent framework | [Strands Agents SDK](https://github.com/strands-agents) (Python) |
-| LLM | Amazon Bedrock (Claude Haiku for classification, Claude Sonnet for drafting) |
+| LLM | Amazon Bedrock (a single configurable Claude model via `BEDROCK_MODEL_ID`) |
 | Memory | Strands Memory backed by DynamoDB |
 | Document generation | ReportLab |
 | Email | Gmail API |
@@ -98,6 +100,13 @@ Fill in `.env` top-to-bottom (each blank field has a comment saying where the
 value comes from): §1 AWS region, §2 AWS identity (or leave blank if using
 `~/.aws`), §3 Bedrock model id, §4 Gmail (optional for dry runs). The seed and
 local API scripts load `.env` automatically. Never commit `.env`.
+
+If you are not already authenticated to AWS, do it once:
+
+```bash
+aws configure          # or: aws configure sso
+aws sts get-caller-identity   # confirm the right account/region
+```
 
 ### 2. Request Bedrock model access
 
@@ -216,6 +225,10 @@ dependency closure from your project `.venv` (pruning the unused Gmail discovery
 docs) into `.lambda_build`, so `deploy.sh` needs no Docker and no PyPI access.
 Just make sure the deps are installed first (`pip install -r requirements.txt`).
 
+> If `./deploy.sh` reports `sam: command not found`, add the SAM CLI to your
+> `PATH` (e.g. `export PATH="$PWD/infra/venv/bin:$PATH"` when it was installed
+> in `infra/venv`), or pass `SAM=/path/to/sam ./deploy.sh`.
+
 ### 5. Frontend against the deployed API (Mode C)
 
 > Running locally instead? Use Mode A (UI preview) or Mode B (full local
@@ -250,9 +263,13 @@ the scheduled-check and dashboard REST API handlers, the Next.js Command Center
 (with an offline seeded-desk fallback), the least-privilege SAM template, demo
 personas, and the deterministic end-to-end dry run.
 
-Still requiring external configuration or manual completion: live Bedrock/AWS
-smoke testing, Gmail OAuth and real sends, public frontend hosting, the final
-architecture image, the recorded demo video, and the Devpost submission.
+Still requiring external configuration or manual completion: Gmail OAuth and
+real sends (dry runs use `CASHFLOW_SEND_MODE=log`), public frontend hosting, the
+recorded demo video, and the Devpost submission.
+
+Deployed and live: the SAM stack (two DynamoDB tables, the scheduled
+Orchestrator Lambda, and the HTTP API) runs in `us-east-1` and serves every
+route; the architecture diagram is rendered and embedded above.
 
 ---
 
@@ -284,3 +301,6 @@ Licensed under the MIT License. See [`LICENSE`](./LICENSE) for details.
 - Architecture diagram: [`demo/architecture-diagram.png`](./demo/architecture-diagram.png) (source: [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md))
 - Demo narration/shot list: [`demo/video_script.md`](./demo/video_script.md)
 - Demo video: _link added at submission_
+
+[^1]: Atradius, *Payment Practices Barometer – United States 2025*: 55% of all B2B invoiced sales in the U.S. are past their due date. https://www.atradius.com
+[^2]: Intuit QuickBooks, *2025 US Small Business Late Payments Report*: the average U.S. small business is owed about $17,500 in unpaid invoices. https://quickbooks.intuit.com

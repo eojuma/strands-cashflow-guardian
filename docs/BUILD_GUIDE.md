@@ -22,7 +22,7 @@
 - **Problem:** Freelancers lose income to three structural, repetitive bottlenecks:
   1. **Uncompensated scope creep** — "quick tweaks" requested over email that add up to unpaid hours because freelancers feel awkward raising a change-order invoice.
   2. **Invoicing friction** — milestones pass without an invoice going out promptly, purely from administrative fatigue.
-  3. **Passive payment chasing** — over 50% of B2B invoices are paid past 30 days; freelancers lack the time (and emotional detachment) for multi-stage follow-ups.
+  3. **Passive payment chasing** — 55% of U.S. B2B invoiced sales are past due (Atradius, *Payment Practices Barometer US 2025*); freelancers lack the time (and emotional detachment) for multi-stage follow-ups.
 - **Audience:** Solo freelancers and micro-agencies who bill hourly or per-milestone, run their client relationships over email, and have no dedicated accounts-receivable function.
 - **Why it matters:** noticing scope creep and wording a day-14 reminder differently from a day-3 one is real accountant judgment. Doing it consistently is a tax on the freelancer's attention — exactly the kind of background, judgment-heavy work an agent should own, surfacing only when a real decision is needed.
 
@@ -49,7 +49,7 @@ It must show, at minimum:
 | Layer | Technology |
 |---|---|
 | Agent framework | Strands Agents SDK (Python) |
-| LLM | Amazon Bedrock (Claude Haiku for classification, Claude Sonnet for drafting) |
+| LLM | Amazon Bedrock (a single configurable Claude model via `BEDROCK_MODEL_ID`) |
 | Memory | DynamoDB (`Clients`, `PendingActions`) |
 | Document generation | ReportLab |
 | Email | Gmail API |
@@ -86,7 +86,7 @@ The five criteria from the Devpost page, each mapped to the concrete deliverable
 3. **Potential Impact** — *credible, specific case for a real audience, and the solution actually addresses it.*
    - Three seeded personas: on-time payer / late payer / scope-creep requester — Day 17.
    - At least one "agent correctly does nothing" scenario — proves judgment, not just triggers — Day 17.
-   - Concrete numbers cited (18% revenue loss, 50%+ late payments).
+   - Concrete numbers cited (Atradius: 55% of U.S. B2B invoiced sales past due; Intuit QuickBooks: ~$17.5k owed per U.S. small business).
 
 4. **Creativity & Originality** — *creative, non-obvious use of Strands; genuine understanding of the problem space.*
    - Scope Creep Sentinel whose `agent_reasoning` surfaces the *why* ("~3 hours beyond the two-revision SOW limit"), not just the invoice — Day 8-10.

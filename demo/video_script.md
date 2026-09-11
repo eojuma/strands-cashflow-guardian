@@ -22,11 +22,11 @@ Target runtime: **4:35–4:50**. Keep the final export below 5:00.
 
 **Narration:**
 
-> Freelancers do not only lose money by charging too little. They lose it when a quick client request becomes unpaid scope, when a completed milestone sits uninvoiced, and when an overdue invoice feels too awkward to chase. More than half of business invoices are paid late. CashflowGuardian is a financial operations agent for freelancers and micro-agencies that notices those moments, prepares the next action, and leaves the final decision with the human.
+> Freelancers do not only lose money by charging too little. They lose it when a quick client request becomes unpaid scope, when a completed milestone sits uninvoiced, and when an overdue invoice feels too awkward to chase. Atradius reports that fifty-five percent of U.S. B2B invoiced sales are past due. CashflowGuardian is a financial operations agent for freelancers and micro-agencies that notices those moments, prepares the next action, and leaves the final decision with the human.
 
 ## 0:35–1:25 — Scope Creep Sentinel
 
-**Screen:** Focus the Lumen & Co client, then the pending change-order card. Hold on the reasoning text and `$225.00` amount.
+**Screen:** Click **Run scope scan (demo)**, then focus the new Lumen & Co change-order card. Hold on the reasoning text and `$225.00` amount.
 
 **Narration:**
 

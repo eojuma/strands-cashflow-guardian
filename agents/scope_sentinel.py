@@ -13,6 +13,7 @@ with a human-readable ``agent_reasoning`` — is the same either way.
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from typing import Any
 
 from strands import Agent
@@ -155,6 +156,26 @@ def check_inbox(emails: list[dict], client: dict) -> list[dict]:
             }
         )
     return proposed
+
+
+def demo_scope_email(client: dict, today: str | None = None) -> dict | None:
+    """Build a synthetic inbound email that trips the Sentinel for ``client``.
+
+    Uses the first ``out_of_scope_examples`` entry from the client's own SOW
+    (falling back to a generic unlisted request, which the classifier treats as
+    scope creep). This lets the dashboard demonstrate the Scope Creep Sentinel
+    live without Gmail OAuth — it feeds the same ``check_inbox`` core the
+    scheduled path and the agent tool use.
+    """
+    sow_terms = schema.parse_sow_terms(client.get(schema.SOW_TERMS, "{}"))
+    examples = sow_terms.get(schema.SOW_OUT_OF_SCOPE_EXAMPLES) or []
+    request = str(examples[0]) if examples else "a new analytics dashboard"
+    return {
+        "sender": client.get(schema.EMAIL, ""),
+        "subject": "One quick addition",
+        "body": f"Could you also add {request}?",
+        "received_at": today or datetime.now(timezone.utc).isoformat(),
+    }
 
 
 def build_scope_sentinel_agent(model: Any) -> Agent:
