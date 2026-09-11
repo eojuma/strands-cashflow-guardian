@@ -24,10 +24,16 @@ TODAY = date(2026, 8, 25)
 
 
 @pytest.fixture
-def demo_db(monkeypatch):
+def demo_db(monkeypatch, tmp_path):
     monkeypatch.setenv("AWS_DEFAULT_REGION", "us-east-1")
     monkeypatch.setenv("AWS_ACCESS_KEY_ID", "testing")
     monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "testing")
+    # A token file makes the handler take the (stubbed) Gmail path rather than
+    # the safe log fallback.
+    token = tmp_path / "token.json"
+    token.write_text("{}")
+    monkeypatch.setenv("GMAIL_TOKEN_FILE", str(token))
+    monkeypatch.delenv("CASHFLOW_SEND_MODE", raising=False)
 
     sends: list[dict] = []
 

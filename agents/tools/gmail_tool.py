@@ -44,6 +44,16 @@ def _client_secret_path() -> Path:
     )
 
 
+def gmail_available() -> bool:
+    """True when a stored OAuth token exists.
+
+    Callers use this to decide whether Gmail can be used *without* triggering
+    the interactive consent flow (``flow.run_local_server``), which cannot run
+    in AWS Lambda. The token is produced once by the local first-run flow.
+    """
+    return _token_path().exists()
+
+
 def _load_credentials():
     """Return Google OAuth credentials, running the consent flow on first use."""
     from google.oauth2.credentials import Credentials
@@ -66,6 +76,17 @@ def _load_credentials():
     token_path.parent.mkdir(parents=True, exist_ok=True)
     token_path.write_text(credentials.to_json())
     return credentials
+
+
+def authorize_gmail() -> Path:
+    """Run the one-time interactive consent flow and return the token path.
+
+    Opens a browser, asks you to grant Gmail access, and writes the token file
+    (default ``credentials/token.json``). Run this once locally; the token is
+    then bundled on redeploy so ``CASHFLOW_SEND_MODE=live`` can send real mail.
+    """
+    _load_credentials()
+    return _token_path()
 
 
 def _build_service():

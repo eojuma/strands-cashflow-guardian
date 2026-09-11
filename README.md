@@ -117,11 +117,19 @@ In the AWS Console, go to Bedrock → Model access, and request access to the Cl
 1. Create a project in [Google Cloud Console](https://console.cloud.google.com/).
 2. Enable the Gmail API.
 3. Create OAuth client credentials (Desktop app type).
-4. Download the credentials JSON and reference its path in `.env`.
-5. Run the local auth flow once to generate a token (see `agents/tools/gmail_tool.py` for the first-run script).
+4. Download the credentials JSON and save it as `credentials/client_secret.json`
+   (or set `GMAIL_CLIENT_SECRET_FILE` to its path in `.env`).
+5. Run the one-time consent flow to create the token (opens a browser):
+   ```bash
+   python scripts/gmail_authorize.py
+   ```
+   This writes `credentials/token.json`. Both files are gitignored.
 
-> For demos and dry runs you can skip Gmail entirely: set `CASHFLOW_SEND_MODE=log`
-> in `.env` and approved sends are logged instead of emailed.
+> For demos and dry runs you can skip Gmail entirely: leave
+> `CASHFLOW_SEND_MODE=log` in `.env` and approved sends are logged instead of
+> emailed. To send for real, set `CASHFLOW_SEND_MODE=live` **and** deploy with
+> `SEND_MODE=live ./infra/deploy.sh` so the Lambda bundles `credentials/`
+> (without a token, live mode logs instead of crashing).
 
 ### 4a. Run the system locally
 

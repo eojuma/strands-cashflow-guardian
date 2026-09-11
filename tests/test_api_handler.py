@@ -29,8 +29,17 @@ def db(monkeypatch):
 
 
 @pytest.fixture
-def sends(monkeypatch):
-    """Capture external sends instead of calling Gmail."""
+def sends(monkeypatch, tmp_path):
+    """Capture external sends instead of calling Gmail.
+
+    A token file is provided so the handler selects the Gmail path (rather than
+    the safe log fallback), which is then stubbed.
+    """
+    token = tmp_path / "token.json"
+    token.write_text("{}")
+    monkeypatch.setenv("GMAIL_TOKEN_FILE", str(token))
+    monkeypatch.delenv("CASHFLOW_SEND_MODE", raising=False)
+
     calls = []
 
     def fake_send(to, subject, body):

@@ -117,6 +117,25 @@ def _copy_backend(dest: Path) -> None:
         )
 
 
+def _copy_credentials(dest: Path) -> bool:
+    """Bundle Gmail OAuth files for a *live* deployment, when a token exists.
+
+    Only copies when ``credentials/token.json`` is present: a client secret
+    without a token cannot be used (the interactive consent flow cannot run in
+    Lambda), so there is no point shipping the secret. Returns True if bundled.
+    """
+    src = REPO_ROOT / "credentials"
+    if not (src / "token.json").exists():
+        return False
+    shutil.copytree(
+        src,
+        dest / "credentials",
+        ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+        dirs_exist_ok=True,
+    )
+    return True
+
+
 def _dir_size_mb(path: Path) -> float:
     return sum(p.stat().st_size for p in path.rglob("*") if p.is_file()) / 1e6
 
@@ -140,6 +159,11 @@ def main() -> None:
 
     _copy_backend(dest)
     print(f"  copied backend: {', '.join(BACKEND_DIRS)}")
+
+    if _copy_credentials(dest):
+        print("  bundled credentials/ (Gmail token found -> live sends enabled)")
+    else:
+        print("  no credentials/token.json -> Gmail disabled (approvals log, never crash)")
 
     roots = _roots_from_requirements(Path(args.requirements))
     dists = _runtime_closure(roots)

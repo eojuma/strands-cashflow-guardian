@@ -27,7 +27,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from datetime import datetime, timezone
 from typing import Any
 
@@ -42,10 +41,15 @@ def _now_iso() -> str:
 
 
 def _gmail_configured() -> bool:
-    """True when Gmail OAuth files are present in the environment."""
-    return bool(
-        os.getenv("GMAIL_TOKEN_FILE") or os.getenv("GMAIL_CLIENT_SECRET_FILE")
-    )
+    """True when a Gmail OAuth token is available so the inbox can be read.
+
+    Requires the *token*, not just the client secret: the interactive consent
+    flow cannot run in Lambda, so a secret without a token must not be treated
+    as usable (it would hang until the function times out).
+    """
+    from agents.tools.gmail_tool import gmail_available
+
+    return gmail_available()
 
 
 def run_scheduled_check(
