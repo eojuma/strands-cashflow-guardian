@@ -79,6 +79,35 @@ strands-cashflow-guardian/
 
 ## Getting Started
 
+### Quick start (clone → deploy → seed → open)
+
+```bash
+# 1. Clone + install
+git clone https://github.com/eojuma/strands-cashflow-guardian.git
+cd strands-cashflow-guardian
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env          # set AWS_REGION + identity (Gmail optional)
+
+# 2. AWS credentials (once)
+aws configure                 # or: aws configure sso
+aws sts get-caller-identity
+
+# 3. Deploy the backend (packages offline; SAM CLI must be on PATH)
+./infra/deploy.sh             # add SEND_MODE=live to send real email
+#    -> prints ApiEndpoint (e.g. https://xxxx.execute-api.us-east-1.amazonaws.com/prod)
+
+# 4. Seed demo data into DynamoDB
+python scripts/seed_demo_data.py --reset
+
+# 5. Run the dashboard
+cd frontend && cp .env.local.example .env.local
+#    set NEXT_PUBLIC_API_BASE_URL to the ApiEndpoint from step 3
+npm install && npm run dev    # http://localhost:3000
+```
+
+Full details, prerequisites, and a no-AWS local mode (Mode B) follow.
+
 ### Prerequisites
 - Python 3.11+
 - Node.js 18+ (for the frontend)
@@ -309,6 +338,7 @@ Licensed under the MIT License. See [`LICENSE`](./LICENSE) for details.
 - **Track:** Professional Agents
 - **Event:** AWS "Agents for Humans" Hackathon
 - **Live demo:** [strands-cashflow-guardian.vercel.app](https://strands-cashflow-guardian.vercel.app)
+- Devpost writeup: [`docs/DEVPOST.md`](./docs/DEVPOST.md)
 - Architecture diagram: [`demo/architecture-diagram.png`](./demo/architecture-diagram.png) (source: [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md))
 - Demo narration/shot list: [`demo/video_script.md`](./demo/video_script.md)
 - Demo video: _link added at submission_
