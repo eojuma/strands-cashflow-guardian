@@ -391,6 +391,12 @@ Implemented end to end:
 7. Human reviews reasoning on dashboard, approves.
 8. Orchestrator sends the change-order email with attached PDF.
 
+The dashboard's **Run scope scan (demo)** button exercises this flow without
+Gmail: it synthesizes an inbound email from the client's own SOW
+(`scope_sentinel.demo_scope_email`) and runs the same `check_inbox` core, so the
+Sentinel can be demonstrated live. An existing pending change order for the
+target client is not duplicated.
+
 ---
 
 ## 9. Frontend ↔ Backend Contract
@@ -408,6 +414,7 @@ for development.
 | `/actions/{action_id}/resolve` | POST | Body: `{decision: "approved" \| "edited" \| "rejected", edited_content?: string}` |
 | `/activity-log` | GET | Returns recent resolved actions + their `agent_reasoning`, for the Activity Log panel |
 | `/run-scheduled-check` | POST | Manually run one scheduled pass (what the EventBridge rule does every 15 minutes) so the dashboard's **Run scheduled check** button doesn't wait |
+| `/run-scope-scan` | POST | Demo path: run only the Scope Creep Sentinel against a SOW-derived inbound email (no Gmail needed); persists a change order for approval |
 | `/clients/{client_id}/milestone-complete` | POST | Body: `{name, amount}` — records a completed milestone and proposes its invoice (§8.1) |
 
 `api_handler.route()` parses these REST-style paths directly and is covered by
@@ -422,10 +429,13 @@ normalizes a named-stage prefix (e.g. `/prod/clients` → `/clients`) and answer
 - **Compute:** `OrchestratorFunction` runs the scheduled deterministic specialist pass. `ApiFunction` serves the dashboard contract and approval state machine.
 - **Trigger:** EventBridge invokes `OrchestratorFunction` every 15 minutes.
 - **Storage:** Two DynamoDB tables (`Clients`, `PendingActions`), both defined in `infra/template.yaml`.
-- **IAM:** A single execution role scoped to exactly: read/write on the two DynamoDB tables, `bedrock:InvokeModel` on the specific Claude model ARNs in use, and no broader permissions. Avoid `dynamodb:*` or `bedrock:*` wildcards — a judge reading your IAM policy as part of "Technological Implementation" will notice the difference.
+- **Model:** one Bedrock model id (`BEDROCK_MODEL_ID`) serves the Orchestrator and both specialists. A Haiku-for-classification / Sonnet-for-drafting split was considered but not used for the MVP — a single model is simpler and the specialists' core judgment is deterministic — and it stays swappable via the env var.
+- **IAM:** each function has its own scoped inline policy rather than one shared wildcard role: `OrchestratorFunction` gets the two DynamoDB tables + index, `bedrock:InvokeModel` on the configured model, and CloudWatch Logs; `ApiFunction` gets only the DynamoDB tables + Logs (it never calls Bedrock). No `dynamodb:*` / `bedrock:*` wildcards.
+- **Packaging:** `infra/deploy.sh` stages the backend + runtime dependency closure offline via `scripts/build_lambda_package.py` (no Docker or PyPI needed) and re-overlays it after `sam build` so prebuilt binary extensions survive.
+- **AgentCore:** Bedrock AgentCore was evaluated as a stretch goal; the MVP uses Lambda + EventBridge (already-scoped IAM, no additional managed runtime). AgentCore remains future work.
 - **Frontend hosting:** not configured yet; Vercel or Amplify Hosting are suitable options.
 
-The SAM and IAM shape are covered by local tests. Live AWS deployment remains pending until credentials, Bedrock access, and Gmail OAuth are configured.
+The SAM/IAM shape and offline packaging are covered by local tests. The stack is deployed (us-east-1) and the API is live; Gmail OAuth remains optional because dry runs use `CASHFLOW_SEND_MODE=log`.
 
 ---
 

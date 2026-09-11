@@ -15,6 +15,7 @@
 #   ./deploy.sh                     # package + deploy
 #   SEND_MODE=live ./deploy.sh      # enable real Gmail sends on approval
 #   STACK_NAME=my-stack ./deploy.sh # override the stack name
+#   SAM=/path/to/sam ./deploy.sh    # use a specific SAM CLI
 #
 # The default SEND_MODE is "log" (no real email) for safe demos.
 set -euo pipefail
@@ -30,13 +31,27 @@ REPO_ROOT="$(cd .. && pwd)"
 PYTHON="${PYTHON:-$REPO_ROOT/.venv/bin/python}"
 [ -x "$PYTHON" ] || PYTHON="python3"
 
+# Resolve the SAM CLI: explicit $SAM, a local venv, then PATH. This avoids the
+# "sam: command not found" failure when SAM was installed into infra/venv.
+SAM_BIN="${SAM:-}"
+if [ -z "$SAM_BIN" ]; then
+  for candidate in "$REPO_ROOT/infra/venv/bin/sam" "$REPO_ROOT/venv/bin/sam" "$REPO_ROOT/.venv/bin/sam"; do
+    if [ -x "$candidate" ]; then SAM_BIN="$candidate"; break; fi
+  done
+fi
+[ -n "$SAM_BIN" ] || SAM_BIN="$(command -v sam || true)"
+if [ -z "$SAM_BIN" ]; then
+  echo "SAM CLI not found. Install it, add it to PATH, or pass SAM=/path/to/sam ./deploy.sh" >&2
+  exit 1
+fi
+
 echo "Deploying CashflowGuardian to ${REGION} (stack: ${STACK_NAME})"
 
 # Stage the backend + runtime dependency closure into ../.lambda_build. The
 # script deliberately leaves no requirements.txt so `sam build` only copies.
 "$PYTHON" "$REPO_ROOT/scripts/build_lambda_package.py" "$REPO_ROOT/.lambda_build"
 # No --use-container: there is nothing for the Python builder to install.
-sam build \
+"$SAM_BIN" build \
   --template template.yaml \
   --region "${REGION}"
 
@@ -51,7 +66,7 @@ done
 
 EXTRA_ARGS=("$@")
 
-sam deploy \
+"$SAM_BIN" deploy \
   --stack-name "${STACK_NAME}" \
   --region "${REGION}" \
   --capabilities CAPABILITY_IAM \

@@ -97,6 +97,69 @@ def run_scheduled_check(
     return summary
 
 
+def run_scope_scan(
+    client_id: str | None = None,
+    clients: list[dict] | None = None,
+    today: str | None = None,
+) -> dict[str, Any]:
+    """Run only the Scope Creep Sentinel against a synthetic inbound email.
+
+    A Gmail-free demo/test path: builds an out-of-scope request from the target
+    client's own SOW and runs the same ``scope_sentinel.check_inbox`` core used
+    by the scheduled path and the agent tool, persisting any change order as
+    ``pending``. An existing pending change order for the target is not
+    duplicated. The regular ``/run-scheduled-check`` path is untouched.
+    """
+    from agents import scope_sentinel
+
+    clients = clients if clients is not None else dynamo_client.list_clients()
+    today = today or _now_iso()
+    targets = _select_scope_targets(clients, client_id)
+
+    proposed: list[dict] = []
+    for client in targets:
+        cid = client.get(schema.CLIENT_ID, "")
+        existing = (
+            dynamo_client.get_pending_actions(status=schema.STATUS_PENDING, client_id=cid)
+            if cid
+            else []
+        )
+        if any(a.get(schema.ACTION_TYPE) == "change_order" for a in existing):
+            continue
+        email = scope_sentinel.demo_scope_email(client, today=today)
+        if email:
+            proposed.extend(scope_sentinel.check_inbox([email], client))
+
+    persisted = orchestrator.persist_proposed_actions(proposed)
+    return {
+        "clients_checked": len(targets),
+        "proposals_persisted": len(persisted),
+        "by_type": _count_by_type(persisted),
+    }
+
+
+def _select_scope_targets(clients: list[dict], client_id: str | None) -> list[dict]:
+    """Pick which client(s) the demo scope scan should check.
+
+    An explicit ``client_id`` wins; otherwise prefer the seeded scope persona
+    (id containing "scope"), then any client whose SOW lists out-of-scope
+    examples, then the first client.
+    """
+    if client_id:
+        return [c for c in clients if c.get(schema.CLIENT_ID) == client_id]
+
+    preferred = next(
+        (c for c in clients if "scope" in (c.get(schema.CLIENT_ID) or "")), None
+    )
+    if preferred:
+        return [preferred]
+    for client in clients:
+        terms = schema.parse_sow_terms(client.get(schema.SOW_TERMS, "{}"))
+        if terms.get(schema.SOW_OUT_OF_SCOPE_EXAMPLES):
+            return [client]
+    return clients[:1]
+
+
 def _propose_milestone_invoices(client: dict) -> list[dict]:
     """Propose an invoice for every complete, uninvoiced milestone.
 

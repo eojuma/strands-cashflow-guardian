@@ -141,6 +141,42 @@ def test_run_scheduled_check_reports_scope_proposals(db, monkeypatch):
     assert summary["by_type"] == {"change_order": 1}
 
 
+def test_run_scope_scan_proposes_change_order_without_gmail(db):
+    from lambda_handlers import orchestrator_handler
+
+    dynamo_client.put_client(_client())
+
+    summary = orchestrator_handler.run_scope_scan(today="2026-08-20T00:00:00+00:00")
+
+    assert summary["by_type"] == {"change_order": 1}
+    pending = dynamo_client.get_pending_actions(status=schema.STATUS_PENDING)
+    assert len(pending) == 1
+    assert pending[0][schema.ACTION_TYPE] == "change_order"
+
+
+def test_run_scope_scan_does_not_duplicate_pending_change_order(db):
+    from lambda_handlers import orchestrator_handler
+
+    dynamo_client.put_client(_client())
+
+    first = orchestrator_handler.run_scope_scan(today="2026-08-20T00:00:00+00:00")
+    second = orchestrator_handler.run_scope_scan(today="2026-08-20T00:00:00+00:00")
+
+    assert first["by_type"] == {"change_order": 1}
+    assert second["by_type"] == {}  # already pending -> not duplicated
+    pending = dynamo_client.get_pending_actions(status=schema.STATUS_PENDING)
+    assert len(pending) == 1
+
+
+def test_scope_scan_route_returns_change_order(db):
+    from lambda_handlers import api_handler
+
+    dynamo_client.put_client(_client())
+    resp = api_handler.route("POST", "/run-scope-scan", {})
+    assert resp["statusCode"] == 200
+    assert json.loads(resp["body"])["by_type"] == {"change_order": 1}
+
+
 # --- api_handler ------------------------------------------------------------
 
 

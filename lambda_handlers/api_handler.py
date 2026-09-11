@@ -171,6 +171,19 @@ def _run_scheduled_check(body: dict) -> dict[str, Any]:
     return _ok(summary)
 
 
+def _run_scope_scan(body: dict) -> dict[str, Any]:
+    """Demo path: run only the Scope Creep Sentinel (no Gmail needed).
+
+    Builds a scope-creep email from the target client's SOW and persists the
+    resulting change order for approval, so the Sentinel can be shown live in
+    the dashboard. Optional body ``{"client_id": "..."}`` targets a client.
+    """
+    from lambda_handlers import orchestrator_handler
+
+    summary = orchestrator_handler.run_scope_scan(client_id=body.get("client_id"))
+    return _ok(summary)
+
+
 def _milestone_complete(client_id: str, body: dict) -> dict[str, Any]:
     """Record a completed milestone and propose its invoice.
 
@@ -239,6 +252,7 @@ def route(method: str, path: str, body: dict | None = None) -> dict[str, Any]:
                     "GET /actions/pending",
                     "GET /activity-log",
                     "POST /run-scheduled-check",
+                    "POST /run-scope-scan",
                     "POST /clients/{client_id}/milestone-complete",
                     "POST /actions/{action_id}/resolve",
                 ],
@@ -252,6 +266,8 @@ def route(method: str, path: str, body: dict | None = None) -> dict[str, Any]:
         return _activity_log()
     if method == "POST" and parts == ["run-scheduled-check"]:
         return _run_scheduled_check(body or {})
+    if method == "POST" and parts == ["run-scope-scan"]:
+        return _run_scope_scan(body or {})
     if method == "POST" and len(parts) == 3 and parts[0] == "clients" and parts[2] == "milestone-complete":
         return _milestone_complete(parts[1], body or {})
     if method == "POST" and len(parts) == 3 and parts[0] == "actions" and parts[2] == "resolve":

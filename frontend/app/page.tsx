@@ -7,6 +7,7 @@ import {
   listPendingActions,
   resolveAction,
   runScheduledCheck,
+  runScopeScan,
   seededDesk,
   type Client,
   type PendingAction,
@@ -23,6 +24,7 @@ export default function Dashboard() {
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [checking, setChecking] = useState(false)
+  const [scanning, setScanning] = useState(false)
   const [offline, setOffline] = useState(false)
 
   const showSeededDesk = useCallback(() => {
@@ -84,6 +86,30 @@ export default function Dashboard() {
     }
   }
 
+  async function handleScopeScan() {
+    if (offline) {
+      setNotice(
+        "Seeded desk is a static snapshot — connect the live API to run the Scope Sentinel.",
+      )
+      return
+    }
+    setScanning(true)
+    setError(null)
+    try {
+      const summary: ScheduledCheckSummary = await runScopeScan()
+      setNotice(
+        summary.proposals_persisted === 0
+          ? "Scope scan ran — no new out-of-scope requests."
+          : `Scope scan ran — ${summary.proposals_persisted} change order(s) proposed.`,
+      )
+      await refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Scope scan failed")
+    } finally {
+      setScanning(false)
+    }
+  }
+
   async function handleResolve(
     action: PendingAction,
     decision: "approved" | "edited" | "rejected",
@@ -123,13 +149,23 @@ export default function Dashboard() {
             proposal.
           </p>
         </div>
-        <button
-          onClick={handleRunCheck}
-          disabled={checking}
-          className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {checking ? "Checking…" : "Run scheduled check"}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={handleScopeScan}
+            disabled={scanning || checking}
+            title="Run the Scope Creep Sentinel against a synthetic inbound email (no Gmail needed)"
+            className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {scanning ? "Scanning…" : "Run scope scan (demo)"}
+          </button>
+          <button
+            onClick={handleRunCheck}
+            disabled={checking || scanning}
+            className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {checking ? "Checking…" : "Run scheduled check"}
+          </button>
+        </div>
       </header>
 
       {offline && (
@@ -178,6 +214,16 @@ export default function Dashboard() {
       <div className="mt-6">
         <ActivityLog entries={activity} />
       </div>
+
+      <footer className="mt-8 flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 pt-4 text-xs text-slate-500">
+        <span>
+          Backed by{" "}
+          <strong className="font-medium text-slate-600">Amazon DynamoDB</strong>{" "}
+          persistent memory — clients, pending actions, and the tone log survive
+          across runs.
+        </span>
+        <span>Human-in-the-loop: nothing is sent without your approval.</span>
+      </footer>
     </main>
   )
 }
