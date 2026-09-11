@@ -190,7 +190,7 @@ def execute_action(action_id: str, send_fn=None) -> bool:
     send_fn(
         to=client.get(schema.EMAIL, ""),
         subject=action.get(schema.ACTION_TYPE, ""),
-        body=action.get(schema.DRAFTED_CONTENT, ""),
+        body=_client_email_body(client, action),
     )
     if action.get(schema.ACTION_TYPE) == "invoice":
         _record_executed_invoice(client, action)
@@ -198,6 +198,39 @@ def execute_action(action_id: str, send_fn=None) -> bool:
         _record_sent_dunning(client, action)
     dynamo_client.update_action_status(action_id, schema.STATUS_EXECUTED)
     return True
+
+
+def _client_email_body(client: dict, action: dict) -> str:
+    """Build the client-facing email body — never a file path.
+
+    Invoice/change-order actions store the generated PDF path in
+    ``drafted_content``; that path must not be emailed. Dunning drafts are
+    already human-readable and pass through unchanged.
+    """
+    action_type = action.get(schema.ACTION_TYPE)
+    name = client.get(schema.NAME) or "there"
+
+    if action_type == "invoice":
+        amount = float(action.get("amount") or 0.0)
+        due = action.get("due_date") or ""
+        milestone = action.get("milestone_name") or "the completed milestone"
+        return (
+            f"Hi {name},\n\n"
+            f"Please find the invoice for {milestone}: ${amount:,.2f}, due {due}.\n"
+            f"Let us know if anything looks incorrect.\n\n"
+            f"Thank you,\nCashflowGuardian"
+        )
+
+    if action_type == "change_order":
+        reasoning = action.get(schema.AGENT_REASONING, "").strip()
+        return (
+            f"Hi {name},\n\n{reasoning}\n\n"
+            f"Please let us know if you'd like us to proceed.\n\n"
+            f"Thank you,\nCashflowGuardian"
+        )
+
+    # Dunning emails (and any future human-readable draft) already carry a body.
+    return action.get(schema.DRAFTED_CONTENT, "")
 
 
 def _record_executed_invoice(client: dict, action: dict) -> None:

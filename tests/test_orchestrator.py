@@ -273,3 +273,40 @@ def test_persist_proposed_actions_allows_different_reference(db):
     # A different invoice is a different reference -> both may be pending.
     orchestrator.persist_proposed_actions([{**base, "invoice_id": "inv_003"}])
     assert len(dynamo_client.get_pending_actions(status=schema.STATUS_PENDING)) == 2
+
+
+def test_invoice_email_body_contains_no_file_path(db):
+    _seed_client()
+    action = _seed_action(
+        action_type="invoice",
+        amount=2400.0,
+        due_date="2026-09-01",
+        milestone_id="mvp",
+        milestone_name="MVP launch",
+        drafted_content="/tmp/generated/invoice_client_001.pdf",
+    )
+    send, calls = _fake_send()
+
+    orchestrator.resolve_action(action[schema.ACTION_ID], "approved", send_fn=send)
+
+    body = calls[0]["body"]
+    assert ".pdf" not in body
+    assert "generated" not in body
+    assert "2,400.00" in body
+    assert "MVP launch" in body
+
+
+def test_change_order_email_body_contains_no_file_path(db):
+    _seed_client()
+    action = _seed_action(
+        action_type="change_order",
+        drafted_content="generated/change_order_client_001.pdf",
+        agent_reasoning="Dark mode toggle is outside the SOW scope.",
+    )
+    send, calls = _fake_send()
+
+    orchestrator.resolve_action(action[schema.ACTION_ID], "approved", send_fn=send)
+
+    body = calls[0]["body"]
+    assert ".pdf" not in body
+    assert "outside the SOW scope" in body
